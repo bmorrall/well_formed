@@ -1,0 +1,9 @@
+<%= form_with model: @form do |f| %>
+  <%= f.text_field :title %>
+  <%= f.text_area :body %>
+  <%= f.collection_select :user_id, @form.collection_for_user_id, :id, :name, {include_blank: true} %>
+  <% if @form.errors[:user_id].any? %>
+    <span class="post_user_id-error"><%= @form.errors[:user_id].first %></span>
+  <% end %>
+  <%= f.submit %>
+<% end %>

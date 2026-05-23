@@ -1,0 +1,129 @@
+module WellFormed
+  VERSION: String
+
+  # Interface for objects that can be used as the `resource` argument to a form.
+  # Matches the subset of ActiveModel/ActiveRecord that form modules depend on.
+  interface _ActiveModelLike
+    def id: () -> untyped
+    def persisted?: () -> bool
+    def save: () -> bool
+    def errors: () -> ::ActiveModel::Errors
+    def valid?: (?untyped context) -> bool
+  end
+
+  class Error < StandardError
+  end
+
+  class UnmatchedAttributesError < Error
+  end
+
+  class RecordInvalid < Error
+    attr_reader record: untyped
+
+    def initialize: (untyped record) -> void
+  end
+
+  # Resource form without a user argument.
+  # Inherit from this when no authentication context is needed.
+  class SimpleResource
+    include _ActiveModelLike
+
+    def self.resource_alias: (::Class | ::Symbol | ::String resource) -> void
+    def self.unmatched_attributes: (:ignore | :warn | :raise mode) -> void
+    def self.merge_model_errors: () -> void
+    def self.save_within_transaction: () -> void
+    def self.nested_attributes_for: (::Symbol name, ?::Class form_class) ?{ () -> void } -> void
+    def self.nested_attribute_for: (::Symbol name, ?::Class form_class) ?{ () -> void } -> void
+    def initialize: (::WellFormed::_ActiveModelLike resource, ?::Hash[::Symbol | ::String, untyped] params) -> void
+
+    attr_reader resource: ::WellFormed::_ActiveModelLike
+
+    def id: () -> untyped
+    def persisted?: () -> bool
+    def new_record?: () -> bool
+    def to_param: () -> ::String?
+
+    def save: () -> bool
+    def save!: () -> bool
+    def submit: () -> (::WellFormed::_ActiveModelLike | false)
+    def submit!: () -> ::WellFormed::_ActiveModelLike
+  end
+
+  # Resource form with a user argument.
+  # Inherit from this for standard create/update flows.
+  class ResourceForm < SimpleResource
+    def self.nested_attributes_for: (::Symbol name, ?::Class form_class) ?{ () -> void } -> void
+    def self.nested_attribute_for: (::Symbol name, ?::Class form_class) ?{ () -> void } -> void
+
+    def initialize: (::WellFormed::_ActiveModelLike resource, untyped user, ?::Hash[::Symbol | ::String, untyped] params) -> void
+
+    attr_reader user: untyped
+  end
+
+  # Action form without a user argument.
+  # Inherit from this when no authentication context is needed.
+  class SimpleAction
+    def self.resource_alias: (::Class | ::Symbol | ::String resource) -> void
+    def self.nested_attributes_for: (::Symbol name, ?::Class form_class) ?{ () -> void } -> void
+    def self.nested_attribute_for: (::Symbol name, ?::Class form_class) ?{ () -> void } -> void
+
+    def initialize: (::WellFormed::_ActiveModelLike resource, ?::Hash[::Symbol | ::String, untyped] params) -> void
+
+    attr_reader resource: ::WellFormed::_ActiveModelLike
+
+    def id: () -> untyped
+    def persisted?: () -> bool
+    def new_record?: () -> bool
+    def to_param: () -> ::String?
+
+    def perform: () -> void
+    def submit: () -> bool
+    def submit!: () -> bool
+  end
+
+  # Action form with a user argument.
+  # Define a `perform` method; call `submit` or `submit!` to run it.
+  class ActionForm < SimpleAction
+    def self.nested_attributes_for: (::Symbol name, ?::Class form_class) ?{ () -> void } -> void
+    def self.nested_attribute_for: (::Symbol name, ?::Class form_class) ?{ () -> void } -> void
+
+    def initialize: (::WellFormed::_ActiveModelLike resource, untyped user, ?::Hash[::Symbol | ::String, untyped] params) -> void
+
+    attr_reader user: untyped
+  end
+
+  # Resource form for plain Ruby objects that may not fully implement the ActiveRecord interface.
+  # id and persisted? delegate to the resource if it responds to them, otherwise return nil/false.
+  # Does not support save_within_transaction (no ActiveRecord transaction available).
+  class SimpleStruct
+    def self.resource_alias: (::Class | ::Symbol | ::String resource) -> void
+    def self.unmatched_attributes: (:ignore | :warn | :raise mode) -> void
+    def self.merge_model_errors: () -> void
+    def self.nested_attributes_for: (::Symbol name, ?::Class form_class) ?{ () -> void } -> void
+    def self.nested_attribute_for: (::Symbol name, ?::Class form_class) ?{ () -> void } -> void
+
+    def initialize: (::WellFormed::_ActiveModelLike resource, ?::Hash[::Symbol | ::String, untyped] params) -> void
+
+    attr_reader resource: ::WellFormed::_ActiveModelLike
+
+    def id: () -> untyped
+    def persisted?: () -> bool
+    def new_record?: () -> bool
+    def to_param: () -> ::String?
+
+    def save: () -> bool
+    def save!: () -> bool
+    def submit: () -> (::WellFormed::_ActiveModelLike | false)
+    def submit!: () -> ::WellFormed::_ActiveModelLike
+  end
+
+  # SimpleStruct with a user argument.
+  class Struct < SimpleStruct
+    def self.nested_attributes_for: (::Symbol name, ?::Class form_class) ?{ () -> void } -> void
+    def self.nested_attribute_for: (::Symbol name, ?::Class form_class) ?{ () -> void } -> void
+
+    def initialize: (::WellFormed::_ActiveModelLike resource, untyped user, ?::Hash[::Symbol | ::String, untyped] params) -> void
+
+    attr_reader user: untyped
+  end
+end

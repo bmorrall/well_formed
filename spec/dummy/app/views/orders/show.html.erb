@@ -1,0 +1,11 @@
+<p><strong>Customer name:</strong> <%= @order.customer_name %></p>
+
+<% @order.line_items.each do |item| %>
+  <p><%= item.name %> &times; <%= item.quantity %></p>
+<% end %>
+
+<% if @order.billing_address %>
+  <p><%= @order.billing_address.street %>, <%= @order.billing_address.city %>, <%= @order.billing_address.postcode %></p>
+<% end %>
+
+<%= link_to "Edit", edit_order_path(@order) %>

@@ -1,0 +1,16 @@
+<%= simple_form_for @form, url: simple_form_order_path(@form), method: :patch do |f| %>
+  <%= f.input :customer_name %>
+
+  <%= f.simple_fields_for :line_items do |lf| %>
+    <%= lf.input :name %>
+    <%= lf.input :quantity %>
+  <% end %>
+
+  <%= f.simple_fields_for :billing_address do |af| %>
+    <%= af.input :street %>
+    <%= af.input :city %>
+    <%= af.input :postcode %>
+  <% end %>
+
+  <%= f.submit %>
+<% end %>

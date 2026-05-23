@@ -1,0 +1,26 @@
+<%= form_with model: @form, url: order_path(@form), method: :patch do |f| %>
+  <%= f.text_field :customer_name %>
+  <% @form.errors[:customer_name].each do |e| %>
+    <span class="error"><%= e %></span>
+  <% end %>
+
+  <%= f.fields_for :line_items do |lf| %>
+    <%= lf.hidden_field :id %>
+    <%= lf.text_field :name %>
+    <% lf.object.errors[:name].each do |e| %>
+      <span class="line-item-name-error"><%= e %></span>
+    <% end %>
+    <%= lf.number_field :quantity %>
+  <% end %>
+
+  <%= f.fields_for :billing_address do |af| %>
+    <%= af.text_field :street %>
+    <% af.object.errors[:street].each do |e| %>
+      <span class="billing-street-error"><%= e %></span>
+    <% end %>
+    <%= af.text_field :city %>
+    <%= af.text_field :postcode %>
+  <% end %>
+
+  <%= f.submit %>
+<% end %>

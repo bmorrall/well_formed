@@ -1,0 +1,21 @@
+/.bundle/
+/.yardoc
+/_yardoc/
+/coverage/
+/doc/
+/pkg/
+/spec/reports/
+/tmp/
+
+# ASDF
+.tool-versions
+
+# Bundler
+Gemfile.lock
+
+# rspec failure tracking
+.rspec_status
+
+# rbs-collection (generated, like vendor/bundle)
+/.gem_rbs_collection/
+/rbs_collection.lock.yaml

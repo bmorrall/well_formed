@@ -1,0 +1,5 @@
+<%= form_with model: @form, url: subscription_path do |f| %>
+  <%= f.text_field :name %>
+  <%= f.email_field :email %>
+  <%= f.submit %>
+<% end %>

@@ -1,0 +1,89 @@
+name: Ruby
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Main (Ruby ${{ matrix.ruby }}, Rails ${{ matrix.rails }})
+    strategy:
+      matrix:
+        ruby:
+          - "3.3.11"
+          - "3.4.9"
+          - "4.0.4"
+        rails:
+          - "7.2"
+          - "8.0"
+          - "8.1"
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      - name: Run tests
+        run: bundle exec rake
+        env:
+          RAILS_VERSION: ${{ matrix.rails }}
+
+  test-gems:
+    runs-on: ubuntu-latest
+    name: ${{ matrix.gem }} (Ruby ${{ matrix.ruby }})
+    strategy:
+      matrix:
+        ruby:
+          - "3.3.11"
+          - "3.4.9"
+          - "4.0.4"
+        gem:
+          - well_formed-pundit
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+          working-directory: gems/${{ matrix.gem }}
+      - name: Run tests
+        run: bundle exec rspec
+        working-directory: gems/${{ matrix.gem }}
+
+  rbs:
+    runs-on: ubuntu-latest
+    name: RBS validate
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4.9"
+          bundler-cache: true
+      - name: Validate RBS signatures
+        run: bundle exec rbs validate sig/well_formed.rbs
+
+  steep:
+    runs-on: ubuntu-latest
+    name: Steep type check
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4.9"
+          bundler-cache: true
+      - name: Install RBS collection
+        run: bundle exec rbs collection install
+      - name: Run Steep
+        run: bundle exec steep check

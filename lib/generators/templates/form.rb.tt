@@ -1,0 +1,28 @@
+# frozen_string_literal: true
+
+class <%= form_class_name %> < WellFormed::ResourceForm
+  # resource_alias :<%= resource_alias_name %>
+
+  # attribute :title, :string
+
+  # merge_model_errors
+
+  # validates :title, presence: true
+
+  # save_within_transaction
+
+  # before_save :set_defaults
+  # after_save  :notify
+  # after_save_commit :notify_async
+
+  # private
+
+  # def set_defaults
+  # end
+
+  # def notify
+  # end
+
+  # def notify_async
+  # end
+end
