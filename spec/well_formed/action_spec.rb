@@ -141,4 +141,16 @@ RSpec.describe WellFormed::ActionForm do
       end
     end
   end
+
+  describe "ReservedMethodGuard" do
+    %i[submit submit!].each do |method_name|
+      it "raises ArgumentError when a subclass defines ##{method_name}" do
+        expect {
+          Class.new(form_class) do
+            define_method(method_name) {}
+          end
+        }.to raise_error(ArgumentError, /#{Regexp.escape(method_name.to_s)}/)
+      end
+    end
+  end
 end

@@ -2,11 +2,28 @@
 
 module WellFormed
   module Persistence
+    module ReservedMethodGuard  # :nodoc:
+      def method_added(method_name)
+        if %i[submit submit! save save!].include?(method_name)
+          raise ArgumentError,
+            "#{self} must not define ##{method_name} — it is reserved by WellFormed. " \
+            "Use before_save/after_save callbacks instead."
+        end
+        super
+      end
+
+      def inherited(subclass)
+        super
+        subclass.extend(ReservedMethodGuard)
+      end
+    end
+
     def self.included(base)
       base.include(ActiveSupport::Callbacks)
       base.include(AttributeAssignment)
       base.define_callbacks(:save)
       base.extend(ClassMethods)
+      base.extend(ReservedMethodGuard)
     end
 
     module ClassMethods
