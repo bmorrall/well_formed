@@ -17,6 +17,7 @@ module WellFormed
     include Translations
     include Persistence
     include NestedAttributes
+    include Extensions
     prepend Initializer
     prepend PoroInterface
 

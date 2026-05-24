@@ -9,6 +9,7 @@ module WellFormed
     include Transactional
     include Collections
     include NestedAttributes
+    include Extensions
     prepend Initializer
   end
 end

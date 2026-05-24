@@ -8,6 +8,7 @@ module WellFormed
     include AttributeAssignment
     include Performer
     include NestedAttributes
+    include Extensions
     prepend Initializer
     include RecordIdentity
   end

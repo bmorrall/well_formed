@@ -6,6 +6,7 @@ require_relative "well_formed/errors"
 require_relative "well_formed/railtie" if defined?(Rails::Railtie)
 
 module WellFormed
+  autoload :Extensions, "well_formed/extensions"
   autoload :Initializer, "well_formed/initializer"
   autoload :WithUser, "well_formed/with_user"
   autoload :AttributeAssignment, "well_formed/attribute_assignment"
@@ -34,5 +35,6 @@ module WellFormed
     base.include Collections
     base.include NestedAttributes
     base.prepend Initializer
+    base.include Extensions
   end
 end
