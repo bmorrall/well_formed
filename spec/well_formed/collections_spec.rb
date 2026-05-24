@@ -393,4 +393,109 @@ RSpec.describe WellFormed::Collections do
       end
     end
   end
+
+  describe "attribute array: true" do
+    describe "without validate:" do
+      let(:form_class) do
+        coll = collection
+
+        stub_const("TagForm", Class.new do
+          include WellFormed
+
+          attribute :tag_ids, array: true
+
+          collection_for :tag_ids do
+            coll
+          end
+        end)
+      end
+
+      it "defines a collection_for_tag_ids method" do
+        expect(form_class.new(resource)).to respond_to(:collection_for_tag_ids)
+      end
+
+      it "returns the collection from the block" do
+        form = form_class.new(resource, {tag_ids: [1, 2]})
+        expect(form.collection_for_tag_ids).to eq(collection)
+      end
+
+      it "accepts an array value on the attribute" do
+        form = form_class.new(resource, {tag_ids: [1, 2, 3]})
+        expect(form.tag_ids).to eq([1, 2, 3])
+      end
+    end
+
+    describe "with validate: true" do
+      let(:form_class) do
+        coll = collection
+
+        stub_const("TagForm", Class.new do
+          include WellFormed
+
+          attribute :tag_ids, array: true
+
+          collection_for :tag_ids, validate: true do
+            coll
+          end
+        end)
+      end
+
+      it "is valid when all values exist in the collection" do
+        stub_where(collection, :id, [1, 2], [1, 2])
+        form = form_class.new(resource, {tag_ids: [1, 2]})
+        expect(form).to be_valid
+      end
+
+      it "is invalid when any value is not in the collection" do
+        stub_where(collection, :id, [1, 99], [1])
+        form = form_class.new(resource, {tag_ids: [1, 99]})
+        expect(form).not_to be_valid
+        expect(form.errors[:tag_ids]).to include("is not included in the list")
+      end
+
+      it "is valid when the array is empty (allow_blank: true)" do
+        form = form_class.new(resource, {tag_ids: []})
+        expect(form).to be_valid
+      end
+
+      it "is valid when the value is nil (allow_blank: true)" do
+        form = form_class.new(resource, {tag_ids: nil})
+        expect(form).to be_valid
+      end
+    end
+
+    describe "with validate: :code" do
+      let(:form_class) do
+        coll = collection
+
+        stub_const("TagForm", Class.new do
+          include WellFormed
+
+          attribute :tag_codes, array: true
+
+          collection_for :tag_codes, validate: :code do
+            coll
+          end
+        end)
+      end
+
+      it "is valid when all values exist matched by the custom field" do
+        stub_where(collection, :code, %w[alpha beta], %w[alpha beta])
+        form = form_class.new(resource, {tag_codes: %w[alpha beta]})
+        expect(form).to be_valid
+      end
+
+      it "is invalid when any value is not matched by the custom field" do
+        stub_where(collection, :code, %w[alpha unknown], %w[alpha])
+        form = form_class.new(resource, {tag_codes: %w[alpha unknown]})
+        expect(form).not_to be_valid
+        expect(form.errors[:tag_codes]).to include("is not included in the list")
+      end
+
+      it "is valid when the array is empty (allow_blank: true)" do
+        form = form_class.new(resource, {tag_codes: []})
+        expect(form).to be_valid
+      end
+    end
+  end
 end
