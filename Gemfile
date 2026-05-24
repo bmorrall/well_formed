@@ -20,6 +20,8 @@ gem "generator_spec"
 
 gem "simple_form"
 
+gem "temping"
+
 gem "halitosis", github: "bmorrall/halitosis"
 
 gem "standard", "~> 1.3"
