@@ -16,7 +16,7 @@ module Api
     private
 
     def subscription_params
-      params.expect(subscription: [:email, :name])
+      params.require(:subscription).permit(:email, :name)
     end
   end
 end

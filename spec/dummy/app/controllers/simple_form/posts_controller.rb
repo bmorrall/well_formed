@@ -11,7 +11,7 @@ module SimpleForm
 
     # GET /simple_form/posts/:id/edit
     def edit
-      @form = UpdatePostForm.new(Post.find(params.expect(:id)), current_user)
+      @form = UpdatePostForm.new(Post.find(params.require(:id)), current_user)
     end
 
     # POST /simple_form/posts
@@ -26,7 +26,7 @@ module SimpleForm
 
     # PATCH /simple_form/posts/:id
     def update
-      @form = UpdatePostForm.new(Post.find(params.expect(:id)), current_user, post_params)
+      @form = UpdatePostForm.new(Post.find(params.require(:id)), current_user, post_params)
       if @form.save
         head :ok
       else
@@ -37,7 +37,7 @@ module SimpleForm
     private
 
     def post_params
-      params.expect(post: [:title, :body, :user_id])
+      params.require(:post).permit(:title, :body, :user_id)
     end
   end
 end

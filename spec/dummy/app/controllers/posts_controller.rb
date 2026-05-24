@@ -10,7 +10,7 @@ class PostsController < ApplicationController
 
   # GET /posts/:id/edit
   def edit
-    @form = UpdatePostForm.new(Post.find(params.expect(:id)), current_user)
+    @form = UpdatePostForm.new(Post.find(params.require(:id)), current_user)
   end
 
   # POST /posts
@@ -25,7 +25,7 @@ class PostsController < ApplicationController
 
   # PATCH /posts/:id
   def update
-    @form = UpdatePostForm.new(Post.find(params.expect(:id)), current_user, post_params)
+    @form = UpdatePostForm.new(Post.find(params.require(:id)), current_user, post_params)
     if @form.save
       head :ok
     else
@@ -36,6 +36,6 @@ class PostsController < ApplicationController
   private
 
   def post_params
-    params.expect(post: [:title, :body, :user_id])
+    params.require(:post).permit(:title, :body, :user_id)
   end
 end

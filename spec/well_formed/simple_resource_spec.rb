@@ -107,7 +107,10 @@ RSpec.describe WellFormed::SimpleResource do
       allow(resource).to receive(:respond_to?).with("title=").and_return(true)
       allow(resource).to receive(:respond_to?).with(:assign_attributes).and_return(true)
       allow(resource).to receive(:assign_attributes)
-      allow(resource).to receive(:save) { order << :save; true }
+      allow(resource).to receive(:save) {
+        order << :save
+        true
+      }
 
       form_class.new(resource, {title: "Hello"}).save
       expect(order).to eq([:before_save, :save])
@@ -120,7 +123,10 @@ RSpec.describe WellFormed::SimpleResource do
       allow(resource).to receive(:respond_to?).with("title=").and_return(true)
       allow(resource).to receive(:respond_to?).with(:assign_attributes).and_return(true)
       allow(resource).to receive(:assign_attributes)
-      allow(resource).to receive(:save) { order << :save; true }
+      allow(resource).to receive(:save) {
+        order << :save
+        true
+      }
 
       form_class.new(resource, {title: "Hello"}).save
       expect(order).to eq([:save, :after_save])

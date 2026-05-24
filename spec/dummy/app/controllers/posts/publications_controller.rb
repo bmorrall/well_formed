@@ -28,10 +28,10 @@ class Posts::PublicationsController < ApplicationController
   private
 
   def set_post
-    @post = Post.find(params.expect(:post_id))
+    @post = Post.find(params.require(:post_id))
   end
 
   def publication_params
-    params.expect(publication: [:reason])
+    params.require(:publication).permit(:reason)
   end
 end

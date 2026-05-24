@@ -10,3 +10,9 @@ inherit_gem:
 AllCops:
   NewCops: enable
   SuggestExtensions: false
+
+Rails:
+  TargetRailsVersion: 7.2
+
+Rails/StrongParametersExpect:
+  Enabled: false

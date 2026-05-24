@@ -535,16 +535,18 @@ RSpec.describe WellFormed::NestedAttributes do
       Class.new do
         def dimensions = []
 
-        def dimensions_attributes=(attrs); end
+        def dimensions_attributes=(attrs)
+        end
       end.new
     end
 
     let(:deep_resource) do
-      li = line_item_resource
+      line_item_resource
       Class.new do
         def line_items = []
 
-        def line_items_attributes=(attrs); end
+        def line_items_attributes=(attrs)
+        end
 
         def assign_attributes(attrs)
           attrs.each { |k, v| public_send(:"#{k}=", v) }

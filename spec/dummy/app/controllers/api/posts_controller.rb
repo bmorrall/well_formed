@@ -15,7 +15,7 @@ module Api
 
     # PATCH /api/posts/:id
     def update
-      post = Post.find(params.expect(:id))
+      post = Post.find(params.require(:id))
       @form = Api::UpdatePostForm.new(post, current_user, post_update_params)
       if @form.save
         render json: {id: post.id, title: post.title, user_code: post.user_code}, status: :ok
@@ -27,11 +27,11 @@ module Api
     private
 
     def post_create_params
-      params.expect(post: [:title, :user_id])
+      params.require(:post).permit(:title, :user_id)
     end
 
     def post_update_params
-      params.expect(post: [:title, :user_code])
+      params.require(:post).permit(:title, :user_code)
     end
   end
 end

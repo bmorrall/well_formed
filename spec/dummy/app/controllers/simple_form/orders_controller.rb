@@ -14,7 +14,7 @@ module SimpleForm
 
     # GET /simple_form/orders/:id/edit
     def edit
-      @form = UpdateOrderForm.new(Order.find(params.expect(:id)), current_user)
+      @form = UpdateOrderForm.new(Order.find(params.require(:id)), current_user)
     end
 
     # POST /simple_form/orders
@@ -30,7 +30,7 @@ module SimpleForm
 
     # PATCH /simple_form/orders/:id
     def update
-      order = Order.find(params.expect(:id))
+      order = Order.find(params.require(:id))
       @form = UpdateOrderForm.new(order, current_user, order_params)
       if @form.save
         redirect_to order_path(order)
@@ -42,11 +42,9 @@ module SimpleForm
     private
 
     def order_params
-      params.expect(
-        order: [:customer_name,
-          line_items_attributes: [[:id, :name, :quantity, :_destroy]],
-          billing_address_attributes: [:street, :city, :postcode]]
-      )
+      params.require(:order).permit(:customer_name,
+        line_items_attributes: [:id, :name, :quantity, :_destroy],
+        billing_address_attributes: [:street, :city, :postcode])
     end
   end
 end

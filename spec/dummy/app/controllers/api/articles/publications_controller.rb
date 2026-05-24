@@ -30,11 +30,11 @@ module Api
       private
 
       def set_article
-        @article = Article.find(params.expect(:article_id))
+        @article = Article.find(params.require(:article_id))
       end
 
       def publication_params
-        params.expect(publication: [:reason])
+        params.require(:publication).permit(:reason)
       end
     end
   end
