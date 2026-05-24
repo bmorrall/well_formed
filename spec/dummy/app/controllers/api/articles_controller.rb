@@ -15,7 +15,7 @@ module Api
 
     # PATCH /api/articles/:id
     def update
-      form = UpdateArticleForm.new(Article.find(params.expect(:id)), current_user, article_params)
+      form = UpdateArticleForm.new(Article.find(params.require(:id)), current_user, article_params)
 
       if (article = form.submit)
         render json: article.as_json, status: :ok
@@ -27,7 +27,7 @@ module Api
     private
 
     def article_params
-      params.expect(article: [:title, :body, :published])
+      params.require(:article).permit(:title, :body, :published)
     end
   end
 end

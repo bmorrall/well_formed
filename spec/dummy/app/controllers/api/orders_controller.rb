@@ -16,7 +16,7 @@ module Api
 
     # PATCH /api/orders/:id
     def update
-      order = Order.find(params.expect(:id))
+      order = Order.find(params.require(:id))
       @form = UpdateOrderForm.new(order, current_user, order_params)
       if @form.save
         render json: {id: order.id, customer_name: order.customer_name}, status: :ok
@@ -29,11 +29,9 @@ module Api
     private
 
     def order_params
-      params.expect(
-        order: [:customer_name,
-          line_items: [[:id, :name, :quantity, :_destroy]],
-          billing_address: [:street, :city, :postcode]]
-      )
+      params.require(:order).permit(:customer_name,
+        line_items: [:id, :name, :quantity, :_destroy],
+        billing_address: [:street, :city, :postcode])
     end
   end
 end
