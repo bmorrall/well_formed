@@ -45,6 +45,7 @@ jobs:
           - "3.4.9"
           - "4.0.4"
         gem:
+          - well_formed-paper_trail
           - well_formed-pundit
 
     steps:
