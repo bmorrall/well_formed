@@ -854,6 +854,10 @@ form.user  # => current_user
 |-----|-------------|
 | [well_formed-pundit](gems/well_formed-pundit/README.md) | [Pundit](https://github.com/varvet/pundit) authorization — adds `authorize!`, `policy`, and `policy_scope` helpers to any WellFormed form |
 
+## See Also
+
+- **[Halitosis](https://github.com/bmorrall/halitosis)** — JSON serialization library for Rails APIs. Declare attributes, HAL-style links, permissions, and nested relationships on serializer classes; render resources and collections with built-in support for sorting, filtering, and pagination. Use `Halitosis::ErrorsSerializer` to serialize `ActiveModel::Errors` from a WellFormed form directly into a JSON:API-style errors response.
+
 ## Development
 
 After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
