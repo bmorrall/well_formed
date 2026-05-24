@@ -854,6 +854,7 @@ form.user  # => current_user
 |-----|-------------|
 | [well_formed-pundit](gems/well_formed-pundit/README.md) | [Pundit](https://github.com/varvet/pundit) authorization — adds `authorize!`, `policy`, and `policy_scope` helpers to any WellFormed form |
 | [well_formed-paper_trail](gems/well_formed-paper_trail/README.md) | [PaperTrail](https://github.com/paper-trail-gem/paper_trail) versioning — automatically sets `whodunnit` to the form's `user` around every `save` and `perform`, with a `paper_trail_whodunnit` macro for custom values |
+| [well_formed-dry_types](gems/well_formed-dry_types/README.md) | [dry-types](https://dry-rb.org/gems/dry-types) coercion — declare typed attributes with `dry_attribute`; coercion runs before validation with configurable error messages |
 
 ## See Also
 
