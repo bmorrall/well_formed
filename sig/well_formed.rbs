@@ -38,12 +38,9 @@ module WellFormed
 
     attr_reader resource: ::WellFormed::_ActiveModelLike
 
-    def id: () -> untyped
-    def persisted?: () -> bool
     def new_record?: () -> bool
     def to_param: () -> ::String?
 
-    def save: () -> bool
     def save!: () -> bool
     def submit: () -> (::WellFormed::_ActiveModelLike | false)
     def submit!: () -> ::WellFormed::_ActiveModelLike
@@ -106,12 +103,9 @@ module WellFormed
 
     attr_reader resource: ::WellFormed::_ActiveModelLike
 
-    def id: () -> untyped
-    def persisted?: () -> bool
     def new_record?: () -> bool
     def to_param: () -> ::String?
 
-    def save: () -> bool
     def save!: () -> bool
     def submit: () -> (::WellFormed::_ActiveModelLike | false)
     def submit!: () -> ::WellFormed::_ActiveModelLike
