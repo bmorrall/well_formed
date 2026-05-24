@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "active_record"
+
 RSpec.describe WellFormed::Transactional do
   let(:resource) do
     Class.new do
@@ -75,6 +77,20 @@ RSpec.describe WellFormed::Transactional do
       allow(ActiveRecord).to receive(:after_all_transactions_commit)
       form_class.new(resource).save
       expect(ActiveRecord).not_to have_received(:after_all_transactions_commit)
+    end
+
+    it "calls a named method inside the commit hook" do
+      called = false
+      commit_block = nil
+      allow(ActiveRecord).to receive(:after_all_transactions_commit) { |&b| commit_block = b }
+
+      form_class.define_method(:notify) { called = true }
+      form_class.after_save_commit :notify
+      form = form_class.new(resource, {name: "Alice"})
+      form.save
+      commit_block.call
+
+      expect(called).to be(true)
     end
   end
 

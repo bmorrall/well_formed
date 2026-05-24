@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require "active_record"
-
 module WellFormed
   module Transactional
     def self.included(base)
@@ -11,10 +9,21 @@ module WellFormed
 
     module ClassMethods
       def after_save_commit(*args, &block)
-        set_callback(:save_commit, :after, *args, &block)
+        require "active_record"
+        if block
+          set_callback(:save_commit, :after) do
+            ::ActiveRecord.after_all_transactions_commit { instance_exec(&block) }
+          end
+        else
+          method_name = args.shift
+          set_callback(:save_commit, :after, *args) do
+            ::ActiveRecord.after_all_transactions_commit { send(method_name) }
+          end
+        end
       end
 
       def save_within_transaction
+        require "active_record"
         set_callback(:save, :around) do |form, block|
           saved = false
           form.resource.class.transaction do
@@ -31,7 +40,7 @@ module WellFormed
 
     def save
       result = super
-      ::ActiveRecord.after_all_transactions_commit { run_callbacks(:save_commit) } if result
+      run_callbacks(:save_commit) if result
       result || false
     end
   end
