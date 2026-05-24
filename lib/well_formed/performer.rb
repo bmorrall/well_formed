@@ -2,6 +2,22 @@
 
 module WellFormed
   module Performer
+    module ReservedMethodGuard  # :nodoc:
+      def method_added(method_name)
+        if %i[submit submit!].include?(method_name)
+          raise ArgumentError,
+            "#{self} must not define ##{method_name} — it is reserved by WellFormed. " \
+            "Use before_perform/after_perform callbacks instead."
+        end
+        super
+      end
+
+      def inherited(subclass)
+        super
+        subclass.extend(ReservedMethodGuard)
+      end
+    end
+
     module Abstract
       private
 
@@ -15,6 +31,7 @@ module WellFormed
       base.define_callbacks(:perform)
       base.extend(ClassMethods)
       base.prepend(Abstract)
+      base.extend(ReservedMethodGuard)
     end
 
     module ClassMethods
