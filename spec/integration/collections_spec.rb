@@ -148,4 +148,121 @@ RSpec.describe "Collections (integration)", type: :integration do
       end
     end
   end
+
+  describe "collection_for with attribute array: true" do
+    before do
+      Temping.create(:tag, parent_class: ApplicationRecord) do
+        with_columns do |t|
+          t.string :name
+          t.string :code
+          t.timestamps
+        end
+      end
+
+      Temping.create(:taggable, parent_class: ApplicationRecord) do
+        with_columns do |t|
+          t.timestamps
+        end
+      end
+    end
+
+    let(:resource) { Taggable.new }
+
+    let(:form_class) do
+      Class.new(WellFormed::SimpleResource) do
+        resource_alias Tag
+
+        attribute :tag_ids, array: true
+
+        collection_for :tag_ids, validate: true do
+          Tag.all
+        end
+
+        private
+
+        def perform
+          true
+        end
+      end
+    end
+
+    it "is valid when all provided ids exist in the collection" do
+      alpha = Tag.create!(name: "Alpha")
+      beta = Tag.create!(name: "Beta")
+
+      form = form_class.new(resource, {tag_ids: [alpha.id, beta.id]})
+
+      expect(form).to be_valid
+    end
+
+    it "is invalid when any provided id does not exist in the collection" do
+      alpha = Tag.create!(name: "Alpha")
+
+      form = form_class.new(resource, {tag_ids: [alpha.id, 99999]})
+
+      expect(form).not_to be_valid
+      expect(form.errors[:tag_ids]).to include("is not included in the list")
+    end
+
+    it "is valid when tag_ids is empty (allow_blank)" do
+      form = form_class.new(resource, {tag_ids: []})
+
+      expect(form).to be_valid
+    end
+
+    it "is valid when tag_ids is nil (allow_blank)" do
+      form = form_class.new(resource, {tag_ids: nil})
+
+      expect(form).to be_valid
+    end
+
+    it "validates against the live collection — ids from deleted records are rejected" do
+      tag = Tag.create!(name: "Ephemeral")
+      tag_id = tag.id
+      tag.destroy
+
+      form = form_class.new(resource, {tag_ids: [tag_id]})
+
+      expect(form).not_to be_valid
+      expect(form.errors[:tag_ids]).to include("is not included in the list")
+    end
+
+    describe "validate: :code" do
+      let(:form_class) do
+        Class.new(WellFormed::SimpleResource) do
+          resource_alias Tag
+
+          attribute :tag_codes, array: true
+
+          collection_for :tag_codes, validate: :code do
+            Tag.all
+          end
+
+          private
+
+          def perform
+            true
+          end
+        end
+      end
+
+      it "is valid when all provided codes exist in the collection" do
+        Tag.create!(name: "Alpha", code: "ALPHA")
+        Tag.create!(name: "Beta", code: "BETA")
+
+        form = form_class.new(resource, {tag_codes: %w[ALPHA BETA]})
+
+        expect(form).to be_valid
+      end
+
+      it "is invalid when any provided code does not exist" do
+        Tag.create!(name: "Alpha", code: "ALPHA")
+
+        form = form_class.new(resource, {tag_codes: %w[ALPHA MISSING]})
+
+        expect(form).not_to be_valid
+        expect(form.errors[:tag_codes]).to include("is not included in the list")
+      end
+    end
+  end
 end
