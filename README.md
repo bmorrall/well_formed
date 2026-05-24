@@ -848,6 +848,12 @@ form.user  # => current_user
 
 `ResourceForm`, `ActionForm`, and `Struct` are themselves implemented this way — they inherit from their Simple counterpart and prepend `WithUser`.
 
+## Plugins
+
+| Gem | Description |
+|-----|-------------|
+| [well_formed-pundit](gems/well_formed-pundit/README.md) | [Pundit](https://github.com/varvet/pundit) authorization — adds `authorize!`, `policy`, and `policy_scope` helpers to any WellFormed form |
+
 ## Development
 
 After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
