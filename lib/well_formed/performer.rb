@@ -29,6 +29,7 @@ module WellFormed
     def self.included(base)
       base.include(ActiveSupport::Callbacks)
       base.define_callbacks(:perform)
+      base.define_callbacks(:perform_commit)
       base.extend(ClassMethods)
       base.prepend(Abstract)
       base.extend(ReservedMethodGuard)
@@ -41,6 +42,20 @@ module WellFormed
 
       def after_perform(*args, &block)
         set_callback(:perform, :after, *args, &block)
+      end
+
+      def after_perform_commit(*args, &block)
+        require "active_record"
+        if block
+          set_callback(:perform_commit, :after) do
+            ::ActiveRecord.after_all_transactions_commit { instance_exec(&block) }
+          end
+        else
+          method_name = args.shift
+          set_callback(:perform_commit, :after, *args) do
+            ::ActiveRecord.after_all_transactions_commit { send(method_name) }
+          end
+        end
       end
 
       def inherited(subclass)
@@ -62,6 +77,7 @@ module WellFormed
         performed = true
       end
       errors.add(:base, :could_not_be_performed, message: "could not be performed") if !performed && errors.empty?
+      run_callbacks(:perform_commit) if performed
       performed
     end
 

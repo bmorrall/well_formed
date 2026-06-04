@@ -21,10 +21,8 @@ module WellFormed
   autoload :NestedForm, "well_formed/nested_form"
   autoload :SimpleResource, "well_formed/simple_resource"
   autoload :SimpleAction, "well_formed/simple_action"
-  autoload :SimpleStruct, "well_formed/simple_struct"
   autoload :ResourceForm, "well_formed/resource_form"
   autoload :ActionForm, "well_formed/action_form"
-  autoload :Struct, "well_formed/struct"
 
   def self.included(base)
     base.include ActiveModel::Model

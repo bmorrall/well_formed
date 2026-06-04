@@ -11,11 +11,16 @@ class <%= form_class_name %> < WellFormed::ResourceForm
 
   # save_within_transaction
 
-  # before_save :set_defaults
-  # after_save  :notify
-  # after_save_commit :notify_async
+  # before_perform :set_defaults
+  # after_perform  :notify
+  # after_perform_commit :notify_async
 
   # private
+
+  # def perform
+  #   assign_attributes_to(resource)
+  #   resource.save
+  # end
 
   # def set_defaults
   # end

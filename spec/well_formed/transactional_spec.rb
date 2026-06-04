@@ -26,15 +26,21 @@ RSpec.describe WellFormed::Transactional do
       attribute :email, :string
 
       validates :name, presence: true
+
+      private
+
+      def perform
+        resource.save
+      end
     end)
   end
 
-  describe ".after_save_commit" do
+  describe ".after_perform_commit" do
     it "registers an after_all_transactions_commit hook on success" do
       commit_block = nil
       allow(ActiveRecord).to receive(:after_all_transactions_commit) { |&b| commit_block = b }
 
-      form_class.after_save_commit { "called" }
+      form_class.after_perform_commit { "called" }
       form = form_class.new(resource, {name: "Alice"})
       form.save
 
@@ -46,24 +52,24 @@ RSpec.describe WellFormed::Transactional do
       commit_block = nil
       allow(ActiveRecord).to receive(:after_all_transactions_commit) { |&b| commit_block = b }
 
-      form_class.after_save_commit { called = true }
+      form_class.after_perform_commit { called = true }
       form_class.new(resource, {name: "Alice"}).save
       commit_block.call
 
       expect(called).to be(true)
     end
 
-    it "fires after after_save when the commit hook is invoked" do
+    it "fires after after_perform when the commit hook is invoked" do
       order = []
       commit_block = nil
       allow(ActiveRecord).to receive(:after_all_transactions_commit) { |&b| commit_block = b }
 
-      form_class.after_save { order << :after_save }
-      form_class.after_save_commit { order << :after_save_commit }
+      form_class.after_perform { order << :after_perform }
+      form_class.after_perform_commit { order << :after_perform_commit }
       form_class.new(resource, {name: "Alice"}).save
       commit_block.call
 
-      expect(order).to eq([:after_save, :after_save_commit])
+      expect(order).to eq([:after_perform, :after_perform_commit])
     end
 
     it "does not register a hook when resource.save returns false" do
@@ -85,7 +91,7 @@ RSpec.describe WellFormed::Transactional do
       allow(ActiveRecord).to receive(:after_all_transactions_commit) { |&b| commit_block = b }
 
       form_class.define_method(:notify) { called = true }
-      form_class.after_save_commit :notify
+      form_class.after_perform_commit :notify
       form = form_class.new(resource, {name: "Alice"})
       form.save
       commit_block.call
@@ -127,6 +133,12 @@ RSpec.describe WellFormed::Transactional do
         attribute :name, :string
         validates :name, presence: true
         save_within_transaction
+
+        private
+
+        def perform
+          resource.save
+        end
       end)
     end
 
@@ -146,16 +158,6 @@ RSpec.describe WellFormed::Transactional do
       form = transaction_form_class.new(ar_resource, {name: "Alice"})
       expect(form.save).to be(false)
       expect(ar_resource.class.transaction_rolled_back?).to be(true)
-    end
-  end
-
-  describe "WellFormed::Struct does not include Transactional" do
-    it "does not have after_save_commit" do
-      expect(WellFormed::Struct).not_to respond_to(:after_save_commit)
-    end
-
-    it "does not have save_within_transaction" do
-      expect(WellFormed::Struct).not_to respond_to(:save_within_transaction)
     end
   end
 end

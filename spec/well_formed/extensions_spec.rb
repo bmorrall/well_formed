@@ -43,8 +43,4 @@ RSpec.describe WellFormed::Extensions do
   it "is included in SimpleAction" do
     expect(WellFormed::SimpleAction.ancestors).to include(described_class)
   end
-
-  it "is included in SimpleStruct" do
-    expect(WellFormed::SimpleStruct.ancestors).to include(described_class)
-  end
 end

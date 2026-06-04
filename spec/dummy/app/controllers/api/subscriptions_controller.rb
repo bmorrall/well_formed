@@ -6,7 +6,8 @@ module Api
     def create
       form = CreateSubscriptionForm.new(Subscription.new, current_user, subscription_params)
 
-      if (subscription = form.submit)
+      if form.submit
+        subscription = form.resource
         render json: {email: subscription.email, name: subscription.name, subscribed: subscription.subscribed}, status: :created
       else
         render json: {errors: form.errors.messages}, status: :unprocessable_content

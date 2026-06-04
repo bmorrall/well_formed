@@ -12,5 +12,12 @@ module Api
     collection_for :user_code, validate: :id, resolves_to: :code do
       User.all
     end
+
+    private
+
+    def perform
+      assign_attributes_to(resource)
+      resource.save
+    end
   end
 end

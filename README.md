@@ -1,6 +1,6 @@
 # WellFormed
 
-WellFormed is a lightweight form object library for Rails. Inherit from `WellFormed::ResourceForm` for standard create/update flows, or `WellFormed::ActionForm` for custom actions that don't persist a resource — both accept a resource, a user, and a params hash, with full `ActiveModel::Model` and `ActiveModel::Attributes` support.
+WellFormed is a lightweight form object library for Rails. Inherit from `WellFormed::ResourceForm` for standard create/update flows, `WellFormed::ActionForm` for custom actions — including operations on plain Ruby objects that don't use ActiveRecord persistence — or `WellFormed::SimpleAction` when there's no current user. All variants accept a resource, an optional user, and a params hash, with full `ActiveModel::Model` and `ActiveModel::Attributes` support.
 
 Form objects are compatible with `form_with` and Rails view helpers anywhere an ActiveRecord model would be accepted.
 
@@ -29,6 +29,13 @@ class CreateArticleForm < WellFormed::ResourceForm
 
   validates :title, presence: true
   validates :body,  presence: true
+
+  private
+
+  def perform
+    assign_attributes_to(resource)
+    resource.save
+  end
 end
 ```
 
@@ -36,8 +43,8 @@ end
 # app/controllers/articles_controller.rb
 def create
   @form = CreateArticleForm.new(Article.new, current_user, article_params)
-  if (@article = @form.submit)
-    redirect_to @article
+  if @form.save
+    redirect_to @form.article
   else
     render :new, status: :unprocessable_entity
   end
@@ -48,8 +55,8 @@ end
 # app/controllers/api/articles_controller.rb
 def create
   @form = CreateArticleForm.new(Article.new, current_user, article_params)
-  if @form.save
-    render json: @form.article, status: :created
+  if (article = @form.submit)
+    render json: article, status: :created
   else
     render json: {errors: @form.errors.messages}, status: :unprocessable_content
   end
@@ -119,6 +126,13 @@ module Articles
     def initialize(article, user, params = {})
       super(article.posts.build, user, params)
     end
+
+    private
+
+    def perform
+      assign_attributes_to(resource)
+      resource.save
+    end
   end
 end
 ```
@@ -165,36 +179,39 @@ resource_alias "article_comment"  # snake_case string
 resource_alias Article            # class — borrows Article.model_name directly
 ```
 
-### Persistence — `save` and `submit`
+### Persistence — `save` and `save!`
 
-The default `save` method:
+`save` is the public entry point. It:
 
 1. Runs validations — returns `false` immediately if invalid
-2. Assigns only form attributes that the resource has a corresponding setter for
-3. Calls `save` on the resource and returns its result (`true` / `false`)
+2. Runs any `before_perform` / `after_perform` callbacks
+3. Calls your private `submit` method, which you define on the form
+
+You are responsible for assigning attributes to the resource and persisting it inside `submit`. The `assign_attributes_to` helper does the assignment, filtering out any attributes the resource has no setter for:
 
 ```ruby
-form = CreateArticleForm.new(article, current_user, { title: "Hello", body: "World" })
-form.save  # => true / false
-```
+class CreateArticleForm < WellFormed::ResourceForm
+  attribute :title, :string
 
-`submit` is a convenience wrapper around `save` that returns the resource on success or `false` on failure, making controller code more concise:
+  validates :title, presence: true
 
-```ruby
-if (article = form.submit)
-  render json: article.as_json, status: :created
-else
-  render json: { errors: form.errors.messages }, status: :unprocessable_entity
+  private
+
+  def perform
+    assign_attributes_to(resource)
+    resource.save
+  end
 end
 ```
 
-Use `save!` or `submit!` when you prefer raising over checking a return value — both raise `WellFormed::RecordInvalid` on failure:
+```ruby
+form = CreateArticleForm.new(article, current_user, { title: "Hello", body: "World" })
+form.save   # => true / false
+form.save!  # raises WellFormed::RecordInvalid if invalid or perform returns falsy
+form.submit # => resource if saved, false otherwise
+```
 
 ```ruby
-form.save!    # raises WellFormed::RecordInvalid if invalid or resource.save fails
-form.submit!  # raises WellFormed::RecordInvalid if invalid or resource.save fails
-              # (submit! also returns the resource on success)
-
 rescue WellFormed::RecordInvalid => e
   e.record          # => the form object
   e.message         # => "Validation failed: Title can't be blank"
@@ -202,13 +219,13 @@ rescue WellFormed::RecordInvalid => e
 end
 ```
 
-For side effects around the save — sending emails, creating audit logs, etc. — use `before_save`, `after_save`, and `after_save_commit` callbacks. For forms that need fully custom persistence logic, consider `WellFormed::Struct` (plain Ruby object resources) or `WellFormed::ActionForm` (no resource persistence at all).
+For side effects around the save — sending emails, creating audit logs, etc. — use `before_perform`, `after_perform`, and `after_perform_commit` callbacks.
 
 #### Unmatched attributes
 
-Form attributes with no matching setter on the resource are silently skipped when `save` is called — they are filtered out before `assign_attributes` is called, so Rails never raises `ActiveModel::UnknownAttributeError`.
+`assign_attributes_to` silently skips form attributes that have no matching setter on the resource — they are filtered out before `assign_attributes` is called, so Rails never raises `ActiveModel::UnknownAttributeError`.
 
-This is the normal case for virtual attributes like `agree_to_terms` or `current_password`, which exist on the form for validation or logic but have no corresponding column on the model — they are validated and accessible on the form as normal, without being assigned to the resource. Alternatively, declare the attribute on the form with `attr_writer` (or `attr_accessor`) instead of `attribute` — the value is still assigned from params, but won't be forwarded to the resource on save.
+This is the normal case for virtual attributes like `agree_to_terms` or `current_password`, which exist on the form for validation or logic but have no corresponding column on the model. Alternatively, declare the attribute on the form with `attr_writer` (or `attr_accessor`) instead of `attribute` — the value is still assigned from params, but won't be forwarded to the resource.
 
 Use `unmatched_attributes` to opt in to a warning or error at the form level instead:
 
@@ -222,17 +239,15 @@ end
 
 `:warn` and `:raise` are useful during development to catch typos or attribute drift between the form and its resource.
 
-#### Model validation errors — `merge_model_errors`
+#### Surfacing model validation errors — `merge_errors`
 
-By default, `save` only runs form-level validations. If `resource.save` fails due to a model-level validation that the form does not replicate, `save` returns `false` with a generic `:base` error (`"could not be saved"`) so that `errors` is never silently empty.
+By default, if `submit` returns a falsy value with no errors on the form, a generic `:base` error (`"could not be saved"`) is added so that `errors` is never silently empty.
 
-When you want model errors surfaced on the form — for example in an API that uses `Halitosis::ErrorsSerializer` — declare `merge_model_errors` in the form class. The form will then copy `resource.errors` onto itself whenever `resource.save` returns `false`:
+When you want model-level validation errors surfaced on the form — for example in an API using `Halitosis::ErrorsSerializer` — call `merge_errors` inside `submit`:
 
 ```ruby
 class Api::CreateUserForm < WellFormed::ResourceForm
   resource_alias :user
-
-  merge_model_errors  # copies resource.errors onto the form on save failure
 
   attribute :name,  :string
   attribute :email, :string
@@ -240,6 +255,15 @@ class Api::CreateUserForm < WellFormed::ResourceForm
   validates :name,  presence: true
   validates :email, presence: true
   # No format validation here — the User model owns that rule
+
+  private
+
+  def perform
+    assign_attributes_to(resource)
+    result = resource.save
+    merge_errors(resource) unless result
+    result
+  end
 end
 ```
 
@@ -250,10 +274,10 @@ class User < ApplicationRecord
 end
 ```
 
-Submitting `email: "not-an-email"` passes form validation but fails at the model. With `merge_model_errors`, the error is copied back:
+Submitting `email: "not-an-email"` passes form validation but fails at the model. `merge_errors` copies the errors back:
 
 ```ruby
-form.save        # => false
+form.save            # => false
 form.errors[:email]  # => ["is invalid"]
 ```
 
@@ -303,16 +327,16 @@ To transform a form attribute before it reaches the resource, use `after_validat
 after_validation { self.title = title&.strip&.downcase }
 ```
 
-#### Callbacks — `before_save` and `after_save`
+#### Callbacks — `before_perform` and `after_perform`
 
-Use `before_save` to run logic after attributes have been assigned to the resource but before it is saved. Use `after_save` to run logic once the resource has been saved.
+Use `before_perform` to run logic before `perform` is called. Use `after_perform` to run logic once `perform` returns truthy.
 
 ```ruby
 class CreateArticleForm < WellFormed::ResourceForm
   attribute :title, :string
 
-  before_save :set_created_by
-  after_save  :notify_subscribers
+  before_perform :set_created_by
+  after_perform  :notify_subscribers
 
   private
 
@@ -329,24 +353,24 @@ end
 Blocks are also accepted:
 
 ```ruby
-before_save { resource.created_by = user }
+before_perform { resource.created_by = user }
 ```
 
-A `before_save` callback can halt the save by calling `throw :abort`, in which case `save` returns `false` and `resource.save` is never called:
+A `before_perform` callback can halt the save by calling `throw :abort`, in which case `save` returns `false` and `perform` is never called:
 
 ```ruby
-before_save { throw :abort unless user.can_publish? }
+before_perform { throw :abort unless user.can_publish? }
 ```
 
-#### Commit callbacks — `after_save_commit`
+#### Commit callbacks — `after_perform_commit`
 
-`after_save_commit` registers a callback that fires after all surrounding database transactions have committed — safe for side effects like sending emails or enqueuing background jobs that must not run if the transaction rolls back.
+`after_perform_commit` registers a callback that fires after all surrounding database transactions have committed — safe for side effects like sending emails or enqueuing background jobs that must not run if the transaction rolls back.
 
-Internally, `after_save_commit` uses `ActiveRecord.after_all_transactions_commit` — so if `save` is called inside a larger controller-level transaction, the callbacks wait for the outermost transaction to commit before firing.
+Internally, `after_perform_commit` uses `ActiveRecord.after_all_transactions_commit` — so if `save` is called inside a larger controller-level transaction, the callbacks wait for the outermost transaction to commit before firing.
 
 ```ruby
 class CreateArticleForm < WellFormed::ResourceForm
-  after_save_commit :notify_subscribers
+  after_perform_commit :notify_subscribers
 
   private
 
@@ -358,7 +382,7 @@ end
 
 #### Transactions — `save_within_transaction`
 
-Call `save_within_transaction` to wrap the entire save (including all callbacks) in a database transaction. If `resource.save` returns `false`, or any callback raises, the transaction is rolled back automatically:
+Call `save_within_transaction` to wrap the entire save (including all callbacks) in a database transaction. If `submit` returns falsy, or any callback raises, the transaction is rolled back automatically:
 
 ```ruby
 class CreateArticleForm < WellFormed::ResourceForm
@@ -371,10 +395,15 @@ class CreateArticleForm < WellFormed::ResourceForm
 
   save_within_transaction
 
-  after_save        :create_audit_log    # runs inside the transaction
-  after_save_commit :notify_subscribers  # runs after the transaction commits
+  after_perform        :create_audit_log    # runs inside the transaction
+  after_perform_commit :notify_subscribers  # runs after the transaction commits
 
   private
+
+  def perform
+    assign_attributes_to(resource)
+    resource.save
+  end
 
   def create_audit_log
     AuditLog.create!(action: :created, record: article, user: user)
@@ -386,11 +415,13 @@ class CreateArticleForm < WellFormed::ResourceForm
 end
 ```
 
-If `AuditLog.create!` raises, the article save is rolled back with it. `after_save_commit` callbacks only fire once the transaction successfully commits.
+If `AuditLog.create!` raises, the article save is rolled back with it. `after_perform_commit` callbacks only fire once the transaction successfully commits.
 
 ## Action forms
 
-For custom actions that don't map to a standard create/update — publishing, archiving, sending a notification — inherit from `WellFormed::ActionForm`. These are identical to regular forms except that attributes are not assigned to the resource, `save` is never called, and there is no default `save` implementation. You define `perform` instead.
+Inherit from `WellFormed::ActionForm` for any operation that isn't a standard ActiveRecord create/update — publishing, archiving, sending a notification, or driving a plain Ruby object that has no `save` method. You define `perform` instead of `save`, and call `submit` from the controller.
+
+Action forms use `RecordIdentity` to provide `persisted?`, `id`, and `to_param` directly on the form, so the resource doesn't need to implement them.
 
 ```ruby
 class PublishArticleForm < WellFormed::ActionForm
@@ -416,9 +447,47 @@ form.submit   # => true if perform ran, false if invalid or halted by before_per
 form.submit!  # raises WellFormed::RecordInvalid if invalid or before_perform halts
 ```
 
+### PORO resources
+
+`ActionForm` also works when the resource is a plain Ruby object — a value object, a service struct, an API client payload — since it provides `persisted?`, `id`, and `to_param` on the form itself and never calls `save` on the resource.
+
+```ruby
+class CreateSubscriptionForm < WellFormed::ActionForm
+  resource_alias :subscription
+
+  attribute :email, :string
+  attribute :name,  :string
+
+  validates :email, presence: true
+  validates :name,  presence: true
+
+  private
+
+  def perform
+    subscription.email = email
+    subscription.name  = name
+    subscription.subscribe!
+  end
+end
+```
+
+```ruby
+# app/controllers/api/subscriptions_controller.rb
+def create
+  form = CreateSubscriptionForm.new(Subscription.new, current_user, subscription_params)
+  if form.submit
+    render json: form.resource, status: :created
+  else
+    render json: {errors: form.errors.messages}, status: :unprocessable_content
+  end
+end
+```
+
+`Subscription` here is a plain Ruby class — no `persisted?`, no `save`. The form handles all the interface concerns.
+
 ### Callbacks — `before_perform` and `after_perform`
 
-`before_perform` and `after_perform` work the same way as `before_save`/`after_save` in regular forms:
+`before_perform` and `after_perform` work identically to the same callbacks on resource forms:
 
 ```ruby
 class PublishArticleForm < WellFormed::ActionForm
@@ -447,7 +516,7 @@ before_perform { throw :abort unless user.can_publish?(article) }
 
 ## Nested attributes
 
-Nested form objects are built in to `WellFormed::ResourceForm`, `WellFormed::ActionForm`, and `WellFormed::Struct`.
+Nested form objects are built in to `WellFormed::ResourceForm` and `WellFormed::ActionForm`.
 
 ```ruby
 class CreateOrderForm < WellFormed::ResourceForm
@@ -739,45 +808,6 @@ Then declare the field with `as: :collection_for`:
 <%= f.input :user_id, as: :collection_for %>
 ```
 
-## PORO support
-
-When the resource is a plain Ruby object that does not respond to `save` — a value object, a service-layer struct, an API client payload — inherit from `WellFormed::Struct` instead. It has the same interface as `WellFormed::ResourceForm` but replaces the default `save` behaviour with a `perform` method you define yourself.
-
-Form attributes are still auto-assigned to the resource (via individual setters), and `before_save`/`after_save` callbacks still work. The AR-specific helpers `after_save_commit` and `save_within_transaction` are not available.
-
-```ruby
-class CreateInvoiceForm < WellFormed::Struct
-  resource_alias :invoice
-
-  attribute :recipient_email, :string
-  attribute :amount_cents,    :integer
-
-  validates :recipient_email, presence: true
-  validates :amount_cents,    numericality: { greater_than: 0 }
-
-  after_validation :normalise_email
-  after_save        :log_issuance
-
-  private
-
-  def perform
-    InvoiceService.issue(invoice)
-  end
-
-  def normalise_email
-    self.recipient_email = recipient_email&.strip&.downcase
-  end
-
-  def log_issuance
-    Rails.logger.info("Invoice issued to #{recipient_email}")
-  end
-end
-```
-
-`submit` works the same way — it runs validations, assigns attributes to the resource, calls `perform`, and returns the resource on success or `false` on failure.
-
-If there's no meaningful resource to wrap at all, use `WellFormed::ActionForm` instead.
-
 ## Translations
 
 WellFormed adds a generic base error when a save or perform fails with no errors already present. The default messages can be overridden in your application's locale files under the form's `resource_alias` key:
@@ -812,7 +842,6 @@ Each base class has a **Simple** counterpart that drops the `user` argument from
 |-----------|--------------|-------------|
 | `WellFormed::ResourceForm` | `WellFormed::SimpleResource` | `(resource, params = {})` |
 | `WellFormed::ActionForm`   | `WellFormed::SimpleAction`   | `(resource, params = {})` |
-| `WellFormed::Struct`       | `WellFormed::SimpleStruct`   | `(resource, params = {})` |
 
 Everything else — attributes, validations, callbacks, collections, nested attributes — works identically. Calling `form.user` on a Simple class raises `NoMethodError`.
 
@@ -839,14 +868,14 @@ If you need to add user support to a custom class that already inherits from one
 class AuditedSyncForm < WellFormed::SimpleResource
   prepend WellFormed::WithUser
 
-  before_save { AuditLog.record(user, resource) }
+  before_perform { AuditLog.record(user, resource) }
 end
 
 form = AuditedSyncForm.new(record, current_user, params)
 form.user  # => current_user
 ```
 
-`ResourceForm`, `ActionForm`, and `Struct` are themselves implemented this way — they inherit from their Simple counterpart and prepend `WithUser`.
+`ResourceForm` and `ActionForm` are themselves implemented this way — they inherit from their Simple counterpart and prepend `WithUser`.
 
 ## Plugins
 

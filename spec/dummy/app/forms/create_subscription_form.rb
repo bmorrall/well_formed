@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class CreateSubscriptionForm < WellFormed::Struct
+class CreateSubscriptionForm < WellFormed::ActionForm
   resource_alias :subscription
 
   attribute :email, :string
