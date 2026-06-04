@@ -8,4 +8,11 @@ class UpdateUserProfileForm < WellFormed::ResourceForm
 
   validates :name, presence: true
   validates :email, presence: true
+
+  private
+
+  def perform
+    assign_attributes_to(resource)
+    resource.save
+  end
 end

@@ -9,4 +9,11 @@ class CreateArticleForm < WellFormed::ResourceForm
 
   validates :title, presence: true
   validates :body, presence: true
+
+  private
+
+  def perform
+    assign_attributes_to(resource)
+    resource.save
+  end
 end

@@ -4,10 +4,10 @@ module WellFormed
   module Persistence
     module ReservedMethodGuard  # :nodoc:
       def method_added(method_name)
-        if %i[submit submit! save save!].include?(method_name)
+        if %i[save save! submit submit!].include?(method_name)
           raise ArgumentError,
             "#{self} must not define ##{method_name} — it is reserved by WellFormed. " \
-            "Use before_save/after_save callbacks instead."
+            "Use before_perform/after_perform callbacks instead."
         end
         super
       end
@@ -21,26 +21,18 @@ module WellFormed
     def self.included(base)
       base.include(ActiveSupport::Callbacks)
       base.include(AttributeAssignment)
-      base.define_callbacks(:save)
+      base.define_callbacks(:perform)
       base.extend(ClassMethods)
       base.extend(ReservedMethodGuard)
     end
 
     module ClassMethods
-      def before_save(*args, &block)
-        set_callback(:save, :before, *args, &block)
+      def before_perform(*args, &block)
+        set_callback(:perform, :before, *args, &block)
       end
 
-      def after_save(*args, &block)
-        set_callback(:save, :after, *args, &block)
-      end
-
-      def merge_model_errors
-        @merge_model_errors = true
-      end
-
-      def merge_model_errors?
-        @merge_model_errors || false
+      def after_perform(*args, &block)
+        set_callback(:perform, :after, *args, &block)
       end
     end
 
@@ -49,14 +41,13 @@ module WellFormed
 
       result = nil
       catch(:abort) do
-        assign_attributes_to(resource)
-        run_callbacks(:save) do
+        run_callbacks(:perform) do
           result = perform
           throw(:abort) unless result
         end
       end
-      errors.add(:base, :could_not_be_saved, message: "could not be saved") if result == false && errors.empty?
-      result || false
+      errors.add(:base, :could_not_be_saved, message: "could not be saved") if !result && errors.empty?
+      !!result
     end
 
     def save!
@@ -69,10 +60,12 @@ module WellFormed
 
     private
 
+    def merge_errors(model)
+      errors.merge!(model.errors)
+    end
+
     def perform
-      result = resource.save
-      errors.merge!(resource.errors) if !result && self.class.merge_model_errors?
-      result
+      raise NotImplementedError, "#{self.class} must implement #perform"
     end
   end
 end

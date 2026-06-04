@@ -91,6 +91,49 @@ RSpec.describe WellFormed::ActionForm do
         expect(form.errors[:base]).to eq(["not allowed"])
       end
     end
+
+    context "with after_perform_commit" do
+      let(:fake_active_record) do
+        Module.new do
+          def self.after_all_transactions_commit(&block)
+            block.call
+          end
+        end
+      end
+
+      before { stub_const("ActiveRecord", fake_active_record) }
+
+      it "runs the block after a successful submit inside after_all_transactions_commit" do
+        committed = []
+        form_class.after_perform_commit { committed << :committed }
+
+        form = form_class.new(resource, user, {reason: "yes"})
+        form.submit
+
+        expect(committed).to eq([:committed])
+      end
+
+      it "does not run the block when submit fails" do
+        committed = []
+        form_class.after_perform_commit { committed << :committed }
+
+        form = form_class.new(resource, user)  # invalid — reason blank
+        form.submit
+
+        expect(committed).to be_empty
+      end
+
+      it "calls a named method via after_perform_commit" do
+        committed = []
+        form_class.define_method(:on_commit) { committed << :committed }
+        form_class.after_perform_commit :on_commit
+
+        form = form_class.new(resource, user, {reason: "yes"})
+        form.submit
+
+        expect(committed).to eq([:committed])
+      end
+    end
   end
 
   describe "create_action / update_action" do

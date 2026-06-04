@@ -5,6 +5,13 @@ RSpec.describe WellFormed::SimpleResource do
     stub_const("CreateThingForm", Class.new(WellFormed::SimpleResource) do
       attribute :title, :string
       validates :title, presence: true
+
+      private
+
+      def perform
+        assign_attributes_to(resource)
+        resource.save
+      end
     end)
   end
 
@@ -79,30 +86,10 @@ RSpec.describe WellFormed::SimpleResource do
     end
   end
 
-  describe "#submit" do
-    it "returns the resource on success" do
-      resource = double("resource")
-      allow(resource).to receive(:respond_to?).with("title").and_return(true)
-      allow(resource).to receive(:title).and_return(nil)
-      allow(resource).to receive(:respond_to?).with("title=").and_return(true)
-      allow(resource).to receive(:respond_to?).with(:assign_attributes).and_return(true)
-      allow(resource).to receive(:assign_attributes)
-      allow(resource).to receive(:save).and_return(true)
-
-      form = form_class.new(resource, {title: "Hello"})
-      expect(form.submit).to eq(resource)
-    end
-
-    it "returns false on failure" do
-      form = form_class.new(resource)
-      expect(form.submit).to be(false)
-    end
-  end
-
   describe "callbacks" do
-    it "runs before_save before persisting" do
+    it "runs before_perform before persisting" do
       order = []
-      form_class.before_save { order << :before_save }
+      form_class.before_perform { order << :before_perform }
       allow(resource).to receive(:respond_to?).with("title").and_return(false)
       allow(resource).to receive(:respond_to?).with("title=").and_return(true)
       allow(resource).to receive(:respond_to?).with(:assign_attributes).and_return(true)
@@ -113,12 +100,12 @@ RSpec.describe WellFormed::SimpleResource do
       }
 
       form_class.new(resource, {title: "Hello"}).save
-      expect(order).to eq([:before_save, :save])
+      expect(order).to eq([:before_perform, :save])
     end
 
-    it "runs after_save after persisting" do
+    it "runs after_perform after persisting" do
       order = []
-      form_class.after_save { order << :after_save }
+      form_class.after_perform { order << :after_perform }
       allow(resource).to receive(:respond_to?).with("title").and_return(false)
       allow(resource).to receive(:respond_to?).with("title=").and_return(true)
       allow(resource).to receive(:respond_to?).with(:assign_attributes).and_return(true)
@@ -129,7 +116,7 @@ RSpec.describe WellFormed::SimpleResource do
       }
 
       form_class.new(resource, {title: "Hello"}).save
-      expect(order).to eq([:save, :after_save])
+      expect(order).to eq([:save, :after_perform])
     end
   end
 

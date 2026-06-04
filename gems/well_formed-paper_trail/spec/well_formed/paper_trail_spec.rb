@@ -24,6 +24,12 @@ RSpec.describe WellFormed::PaperTrail do
     let(:form_class) do
       stub_const("TestResourceForm", Class.new(WellFormed::ResourceForm) do
         attribute :title, :string
+
+        private
+
+        def perform
+          resource.save
+        end
       end)
     end
 
@@ -114,6 +120,10 @@ RSpec.describe WellFormed::PaperTrail do
     let(:form_class) do
       stub_const("GlobalConfigForm", Class.new(WellFormed::ResourceForm) do
         attribute :title, :string
+
+        private
+
+        def perform = resource.save
       end)
     end
 
@@ -168,6 +178,10 @@ RSpec.describe WellFormed::PaperTrail do
         stub_const("CustomWhodunnitForm", Class.new(WellFormed::ResourceForm) do
           attribute :title, :string
           paper_trail_whodunnit { user.email }
+
+          private
+
+          def perform = resource.save
         end)
       end
 
@@ -186,6 +200,10 @@ RSpec.describe WellFormed::PaperTrail do
       let(:form_class) do
         stub_const("NilUserForm", Class.new(WellFormed::ResourceForm) do
           attribute :title, :string
+
+          private
+
+          def perform = resource.save
         end)
       end
 
@@ -205,6 +223,10 @@ RSpec.describe WellFormed::PaperTrail do
         stub_const("ParentForm", Class.new(WellFormed::ResourceForm) do
           attribute :title, :string
           paper_trail_whodunnit { user.email }
+
+          private
+
+          def perform = resource.save
         end)
       end
 
@@ -240,6 +262,10 @@ RSpec.describe WellFormed::PaperTrail do
         stub_const("InheritParentForm", Class.new(WellFormed::ResourceForm) do
           attribute :title, :string
           paper_trail_whodunnit { user.email }
+
+          private
+
+          def perform = resource.save
         end)
       end
 

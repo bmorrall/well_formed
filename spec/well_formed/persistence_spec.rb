@@ -25,6 +25,13 @@ RSpec.describe WellFormed::Persistence do
       attribute :email, :string
 
       validates :name, presence: true
+
+      private
+
+      def perform
+        assign_attributes_to(resource)
+        resource.save
+      end
     end)
   end
 
@@ -35,145 +42,77 @@ RSpec.describe WellFormed::Persistence do
         expect(form.save).to be(true)
       end
 
-      it "assigns matching attributes to the resource" do
-        form = form_class.new(resource, {name: "Alice", email: "alice@example.com"})
-        form.save
-        expect(resource.assigned_attributes).to eq("name" => "Alice", "email" => "alice@example.com")
-      end
-
-      it "skips attributes the resource has no setter for" do
-        form_class.attribute :extra, :string
-        form = form_class.new(resource, {name: "Alice", email: "alice@example.com", extra: "ignored"})
-        form.save
-        expect(resource.assigned_attributes.keys).not_to include("extra")
-      end
-
-      it "does not assign form attr_writer attributes to the resource" do
-        form_class.attr_writer :agree_to_terms
-        form = form_class.new(resource, {name: "Alice", agree_to_terms: "1"})
-        form.save
-        expect(resource.assigned_attributes.keys).not_to include("agree_to_terms")
-      end
-
-      it "does not assign form attr_accessor attributes to the resource" do
-        form_class.attr_accessor :agree_to_terms
-        form = form_class.new(resource, {name: "Alice", agree_to_terms: "1"})
-        form.save
-        expect(form.agree_to_terms).to eq("1")
-        expect(resource.assigned_attributes.keys).not_to include("agree_to_terms")
-      end
-
-      context "with unmatched_attributes :warn" do
-        it "emits a warning and still saves" do
-          form_class.attribute :extra, :string
-          form_class.unmatched_attributes :warn
-          form = form_class.new(resource, {name: "Alice", extra: "ignored"})
-          expect { form.save }.to output(/extra/).to_stderr
-          expect(resource.assigned_attributes.keys).not_to include("extra")
-        end
-      end
-
-      context "with unmatched_attributes :raise" do
-        it "raises UnmatchedAttributesError listing the unmatched attributes" do
-          form_class.attribute :extra, :string
-          form_class.unmatched_attributes :raise
-          form = form_class.new(resource, {name: "Alice", extra: "ignored"})
-          expect { form.save }.to raise_error(WellFormed::UnmatchedAttributesError, /extra/)
-        end
-      end
-
-      context "with unmatched_attributes :ignore (default)" do
-        it "raises ArgumentError for an invalid policy" do
-          expect { form_class.unmatched_attributes :bad }.to raise_error(ArgumentError)
-        end
-      end
-
-      it "calls save on the resource" do
-        form = form_class.new(resource, {name: "Alice", email: "alice@example.com"})
-        expect(resource).to receive(:save).and_return(true)
+      it "calls perform" do
+        form = form_class.new(resource, {name: "Alice"})
+        expect(form).to receive(:perform).and_call_original
         form.save
       end
     end
 
     context "when invalid" do
-      it "returns false without calling save on the resource" do
+      it "returns false without calling perform" do
         form = form_class.new(resource)
-        expect(resource).not_to receive(:save)
+        expect(form).not_to receive(:perform)
         expect(form.save).to be(false)
       end
     end
 
+    context "when perform returns falsy" do
+      it "returns false and adds a base error" do
+        form_class.define_method(:perform) { nil }
+        form = form_class.new(resource, {name: "Alice"})
+        expect(form.save).to be(false)
+        expect(form.errors[:base]).to include("could not be saved")
+      end
+    end
+
     context "with callbacks" do
-      it "runs before_save after assigning attributes but before resource.save" do
+      it "runs before_perform before perform" do
         order = []
-        form_class.before_save { order << :before_save }
-        form = form_class.new(resource, {name: "Alice"})
-        allow(resource).to receive(:save) do
-          order << :save
+        form_class.before_perform { order << :before_perform }
+        form_class.define_method(:perform) {
+          order << :perform
           true
-        end
-        form.save
-        expect(order).to eq([:before_save, :save])
-      end
-
-      it "runs before_save with attributes already assigned to the resource" do
-        seen_attrs = nil
-        form_class.before_save { seen_attrs = resource.assigned_attributes }
+        }
         form = form_class.new(resource, {name: "Alice"})
         form.save
-        expect(seen_attrs).to include("name" => "Alice")
+        expect(order).to eq([:before_perform, :perform])
       end
 
-      it "runs after_save after assigning attributes" do
+      it "runs after_perform after perform" do
         order = []
-        form_class.after_save { order << :after_save }
-        form = form_class.new(resource, {name: "Alice"})
-        allow(resource).to receive(:save) do
-          order << :save
+        form_class.after_perform { order << :after_perform }
+        form_class.define_method(:perform) {
+          order << :perform
           true
-        end
+        }
+        form = form_class.new(resource, {name: "Alice"})
         form.save
-        expect(order).to eq([:save, :after_save])
+        expect(order).to eq([:perform, :after_perform])
       end
 
-      it "halts save when a before_save callback throws :abort" do
-        form_class.before_save { throw :abort }
+      it "halts save when a before_perform callback throws :abort" do
+        form_class.before_perform { throw :abort }
         form = form_class.new(resource, {name: "Alice"})
-        expect(resource).not_to receive(:save)
+        expect(form).not_to receive(:perform)
         expect(form.save).to be(false)
       end
 
-      it "does not run after_save if resource.save returns false" do
+      it "does not run after_perform if perform returns false" do
         called = false
-        form_class.after_save { called = true }
-        allow(resource).to receive(:save).and_return(false)
+        form_class.after_perform { called = true }
+        form_class.define_method(:perform) { false }
         form = form_class.new(resource, {name: "Alice"})
         form.save
         expect(called).to be(false)
       end
 
       it "gives access to resource in method callbacks" do
-        form_class.before_save :stamp_creator
+        form_class.before_perform :stamp_creator
         form_class.define_method(:stamp_creator) { resource.instance_variable_set(:@created_by, :stamped) }
         form = form_class.new(resource, {name: "Alice"})
         form.save
         expect(resource.instance_variable_get(:@created_by)).to eq(:stamped)
-      end
-    end
-  end
-
-  describe "#submit" do
-    context "when valid" do
-      it "returns the resource" do
-        form = form_class.new(resource, {name: "Alice"})
-        expect(form.submit).to eq(resource)
-      end
-    end
-
-    context "when invalid" do
-      it "returns false" do
-        form = form_class.new(resource)
-        expect(form.submit).to be(false)
       end
     end
   end
@@ -202,12 +141,29 @@ RSpec.describe WellFormed::Persistence do
       end
     end
 
-    context "when a before_save callback aborts (no validation errors)" do
+    context "when a before_perform callback aborts (no validation errors)" do
       it "raises RecordInvalid with a generic message" do
-        form_class.before_save { throw :abort }
+        form_class.before_perform { throw :abort }
         form = form_class.new(resource, {name: "Alice"})
-        expect { form.save! }.to raise_error(WellFormed::RecordInvalid, "Record invalid")
+        expect { form.save! }.to raise_error(WellFormed::RecordInvalid, "Validation failed: could not be saved")
       end
+    end
+  end
+
+  describe "#merge_errors" do
+    it "copies errors from another model onto the form" do
+      model = stub_const("ErrorSourceModel", Class.new do
+        include ActiveModel::Model
+
+        attr_accessor :email
+        validates :email, presence: true
+      end).new
+      model.valid?
+
+      form = form_class.new(resource, {name: "Alice"})
+      form.send(:merge_errors, model)
+
+      expect(form.errors[:email]).to include("can't be blank")
     end
   end
 
@@ -237,61 +193,21 @@ RSpec.describe WellFormed::Persistence do
     end
   end
 
-  describe "model error handling" do
-    let(:failing_resource) do
-      stub_const("FailingResource", Class.new do
-        include ActiveModel::Model
+  describe "without perform defined" do
+    it "raises NotImplementedError" do
+      klass = stub_const("NoPerformForm", Class.new do
+        include WellFormed
 
-        attr_accessor :name, :email
-
-        def assign_attributes(attrs)
-          attrs.each { |k, v| public_send(:"#{k}=", v) }
-        end
-
-        def save
-          errors.add(:email, :invalid, message: "is invalid")
-          false
-        end
-      end).new
-    end
-
-    context "without merge_model_errors" do
-      it "returns false when resource.save fails" do
-        form = form_class.new(failing_resource, {name: "Alice", email: "bad"})
-        expect(form.save).to be(false)
-      end
-
-      it "adds a generic base error so errors is never empty" do
-        form = form_class.new(failing_resource, {name: "Alice", email: "bad"})
-        form.save
-        expect(form.errors[:base]).to include("could not be saved")
-      end
-    end
-
-    context "with merge_model_errors" do
-      before { form_class.merge_model_errors }
-
-      it "returns false when resource.save fails" do
-        form = form_class.new(failing_resource, {name: "Alice", email: "bad"})
-        expect(form.save).to be(false)
-      end
-
-      it "copies model errors onto the form" do
-        form = form_class.new(failing_resource, {name: "Alice", email: "bad"})
-        form.save
-        expect(form.errors[:email]).to include("is invalid")
-      end
-
-      it "does not add a generic base error when model errors were merged" do
-        form = form_class.new(failing_resource, {name: "Alice", email: "bad"})
-        form.save
-        expect(form.errors[:base]).to be_empty
-      end
+        attribute :name, :string
+        validates :name, presence: true
+      end)
+      form = klass.new(resource, {name: "Alice"})
+      expect { form.save }.to raise_error(NotImplementedError, /NoPerformForm/)
     end
   end
 
   describe "ReservedMethodGuard" do
-    %i[submit submit! save save!].each do |method_name|
+    %i[save save! submit submit!].each do |method_name|
       it "raises ArgumentError when a subclass defines ##{method_name}" do
         expect {
           Class.new(form_class) do

@@ -23,6 +23,12 @@ RSpec.describe WellFormed::NestedAttributes do
       validates :customer_name, presence: true
 
       nested_attributes_for :line_items, LineItemForm
+
+      private
+
+      def perform
+        resource.save
+      end
     end)
   end
 

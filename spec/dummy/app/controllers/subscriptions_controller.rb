@@ -11,7 +11,7 @@ class SubscriptionsController < ApplicationController
   # POST /subscription
   def create
     @form = CreateSubscriptionForm.new(Subscription.new, current_user, subscription_params)
-    if @form.save
+    if @form.submit
       head :created
     else
       render :new, status: :unprocessable_content

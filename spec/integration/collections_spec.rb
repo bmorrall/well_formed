@@ -16,6 +16,13 @@ RSpec.describe "Collections (integration)", type: :integration do
         collection_for :user_id, validate: :code, resolves_to: :id do
           User.all
         end
+
+        private
+
+        def perform
+          assign_attributes_to(resource)
+          resource.save
+        end
       end
     end
 
@@ -24,7 +31,8 @@ RSpec.describe "Collections (integration)", type: :integration do
         user = User.create!(name: "Alice", email: "alice@example.com", code: "ALICE")
 
         form = form_class.new(Post.new, nil, {title: "Hello", user_id: "ALICE"})
-        result = form.submit
+        form.save
+        result = form.resource
 
         expect(result).to be_a(Post)
         expect(result.user_id).to eq(user.id)
@@ -33,7 +41,7 @@ RSpec.describe "Collections (integration)", type: :integration do
       it "is invalid and does not persist when the code is not in the collection" do
         form = form_class.new(Post.new, nil, {title: "Hello", user_id: "MISSING"})
 
-        expect(form.submit).to be(false)
+        expect(form.save).to be(false)
         expect(form.errors[:user_id]).to include("is not included in the list")
         expect(Post.count).to eq(0)
       end
@@ -42,7 +50,7 @@ RSpec.describe "Collections (integration)", type: :integration do
         user = User.create!(name: "Alice", email: "alice@example.com", code: "ALICE")
         form = form_class.new(Post.new, nil, {title: "Hello", user_id: user.id})
 
-        expect(form.submit).to be(false)
+        expect(form.save).to be(false)
         expect(form.errors[:user_id]).to include("is not included in the list")
         expect(Post.count).to eq(0)
       end
@@ -50,7 +58,8 @@ RSpec.describe "Collections (integration)", type: :integration do
       it "is valid and persists with nil user_id (allow_blank)" do
         form = form_class.new(Post.new, nil, {title: "Hello", user_id: nil})
 
-        result = form.submit
+        form.save
+        result = form.resource
 
         expect(result).to be_a(Post)
         expect(result.user_id).to be_nil
@@ -73,7 +82,8 @@ RSpec.describe "Collections (integration)", type: :integration do
         existing_post = Post.create!(title: "Old", body: "", user_id: user_a.id)
 
         form = form_class.new(existing_post, nil, {title: "Updated", user_id: "BOB"})
-        result = form.submit
+        form.save
+        result = form.resource
 
         expect(result).to be_a(Post)
         expect(existing_post.reload.user_id).to eq(user_b.id)
@@ -94,6 +104,13 @@ RSpec.describe "Collections (integration)", type: :integration do
         collection_for :user_code, validate: :id, resolves_to: :code do
           User.all
         end
+
+        private
+
+        def perform
+          assign_attributes_to(resource)
+          resource.save
+        end
       end
     end
 
@@ -102,7 +119,8 @@ RSpec.describe "Collections (integration)", type: :integration do
         user = User.create!(name: "Alice", email: "alice@example.com", code: "ALICE")
 
         form = form_class.new(Post.new, nil, {title: "Hello", user_code: user.id})
-        result = form.submit
+        form.save
+        result = form.resource
 
         expect(result).to be_a(Post)
         expect(result.user_code).to eq("ALICE")
@@ -111,14 +129,15 @@ RSpec.describe "Collections (integration)", type: :integration do
       it "is invalid and does not persist when the id is not in the collection" do
         form = form_class.new(Post.new, nil, {title: "Hello", user_code: 9999})
 
-        expect(form.submit).to be(false)
+        expect(form.save).to be(false)
         expect(form.errors[:user_code]).to include("is not included in the list")
         expect(Post.count).to eq(0)
       end
 
       it "is valid and persists with nil user_code (allow_blank)" do
         form = form_class.new(Post.new, nil, {title: "Hello", user_code: nil})
-        result = form.submit
+        form.save
+        result = form.resource
 
         expect(result).to be_a(Post)
         expect(result.user_code).to be_nil
@@ -141,7 +160,8 @@ RSpec.describe "Collections (integration)", type: :integration do
         existing_post = Post.create!(title: "Old", body: "", user_code: "ALICE")
 
         form = form_class.new(existing_post, nil, {title: "Updated", user_code: user_b.id})
-        result = form.submit
+        form.save
+        result = form.resource
 
         expect(result).to be_a(Post)
         expect(existing_post.reload.user_code).to eq("BOB")

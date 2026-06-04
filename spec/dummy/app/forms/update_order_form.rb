@@ -24,4 +24,11 @@ class UpdateOrderForm < WellFormed::ResourceForm
     validates :city, presence: true
     validates :postcode, presence: true
   end
+
+  private
+
+  def perform
+    assign_attributes_to(resource)
+    resource.save
+  end
 end
