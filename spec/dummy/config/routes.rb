@@ -12,6 +12,7 @@ Rails.application.routes.draw do
     resource :user_profile, only: [:update]
     resource :subscription, only: [:create]
     resources :orders, only: [:create, :update]
+    resources :flat_orders, only: [:create, :update]
   end
   resources :posts, only: [:new, :create, :edit, :update] do
     scope module: :posts do
