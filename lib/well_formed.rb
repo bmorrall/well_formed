@@ -16,6 +16,7 @@ module WellFormed
   autoload :RecordIdentity, "well_formed/record_identity"
   autoload :Translations, "well_formed/translations"
   autoload :NestedAttributes, "well_formed/nested_attributes"
+  autoload :DelegatedAttributes, "well_formed/delegated_attributes"
   autoload :Collections, "well_formed/collections"
   autoload :SimpleNestedForm, "well_formed/simple_nested_form"
   autoload :NestedForm, "well_formed/nested_form"

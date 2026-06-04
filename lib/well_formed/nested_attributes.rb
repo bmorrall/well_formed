@@ -4,6 +4,7 @@ module WellFormed
   module NestedAttributes
     def self.included(base)
       base.extend(ClassMethods)
+      base.include(WellFormed::DelegatedAttributes)
     end
 
     module ClassMethods

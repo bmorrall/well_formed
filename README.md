@@ -549,8 +549,9 @@ end
 
 | Macro | Wraps |
 |-------|-------|
-| `nested_attributes_for :name` | A **collection** of nested forms (e.g. `has_many`) |
-| `nested_attribute_for  :name` | A **single** nested form (e.g. `has_one` / `belongs_to`) |
+| `nested_attributes_for :name`   | A **collection** of nested forms (e.g. `has_many`) |
+| `nested_attribute_for  :name`   | A **single** nested form (e.g. `has_one` / `belongs_to`) |
+| `delegated_attribute_for :name` | Flattens a `has_one` / `belongs_to` association's attributes directly onto the parent form |
 
 Each macro accepts either an inline block (shown above) or an explicit form class:
 
@@ -664,6 +665,88 @@ Use `simple_fields_for` in place of `fields_for` and `f.input` in place of the i
 ```
 
 Validation errors on nested fields are promoted to the parent form with structured keys (e.g. `"line_items[0].name"`), which SimpleForm resolves back to the correct field and renders inline error messages automatically.
+
+## Delegated attributes
+
+Use `delegated_attribute_for` when you want a `has_one` / `belongs_to` association's fields to appear flat on the parent form — no nested form object, no `fields_for`, just plain attributes and validations on the same form.
+
+```ruby
+class CheckoutForm < WellFormed::ResourceForm
+  resource_alias :order
+
+  attribute :customer_name, :string
+  validates :customer_name, presence: true
+
+  delegated_attribute_for :billing_address do
+    attribute :street,   :string
+    attribute :city,     :string
+    attribute :postcode, :string
+
+    validates :street,   presence: true
+    validates :city,     presence: true
+    validates :postcode, presence: true
+  end
+
+  private
+
+  def perform
+    assign_attributes_to(resource)
+    resource.save
+  end
+end
+```
+
+The block declares attributes (with types) and validations exactly as you would on any form. Internally:
+
+- A single `billing_address_attributes` hash attribute is registered on the form.
+- Individual virtual accessors (`street`, `city`, `postcode`) pack values into that hash.
+- `form.attributes` returns `{ "billing_address_attributes" => { "street" => "...", ... } }`, so `assign_attributes_to` calls `resource.billing_address_attributes=` naturally via AR's `accepts_nested_attributes_for`.
+- When an attribute is not in the submitted params, the reader delegates to the resource's association — `form.street` returns `resource.billing_address.street`.
+
+```ruby
+# Flat params — street, city, postcode at the top level
+form = CheckoutForm.new(Order.new, current_user, {
+  customer_name: "Alice",
+  street:        "1 Main St",
+  city:          "Springfield",
+  postcode:      "12345"
+})
+
+form.street    # => "1 Main St"
+form.valid?    # => true
+form.save      # => true  (creates order + billing_address via accepts_nested_attributes_for)
+```
+
+On update, attributes not present in the submitted params are read through from the existing association, so unsubmitted fields are not cleared:
+
+```ruby
+form = CheckoutForm.new(existing_order, current_user, { customer_name: "Updated" })
+form.street    # => existing_order.billing_address.street  (not nil)
+form.save      # => true  (billing_address unchanged)
+```
+
+### Controller — strong params
+
+Permit the flat attributes at the top level:
+
+```ruby
+def order_params
+  params.require(:order).permit(:customer_name, :street, :city, :postcode)
+end
+```
+
+The model must declare `accepts_nested_attributes_for` for the association so that `billing_address_attributes=` is available:
+
+```ruby
+class Order < ApplicationRecord
+  has_one :billing_address
+  accepts_nested_attributes_for :billing_address
+end
+```
+
+### Validations
+
+`validates` calls inside the block are deferred and replayed on the parent form class after the virtual readers are defined, so error keys (`street`, `city`, etc.) work correctly with `form.errors` and view helpers.
 
 ## Collections
 
