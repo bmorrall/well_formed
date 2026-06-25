@@ -3,7 +3,7 @@
 module WellFormed
   class Railtie < Rails::Railtie
     generators do
-      require_relative "../../generators/resource_form_generator"
+      require_relative "../generators/resource_form_generator"
     end
   end
 end

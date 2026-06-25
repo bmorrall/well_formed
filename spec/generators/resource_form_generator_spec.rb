@@ -2,7 +2,8 @@
 
 require "rails_helper"
 require "generator_spec"
-require "generators/resource_form_generator"
+
+Rails.application.load_generators
 
 RSpec.describe ResourceFormGenerator, type: :generator do
   include GeneratorSpec::GeneratorExampleGroup
