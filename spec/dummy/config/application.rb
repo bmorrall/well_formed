@@ -9,6 +9,7 @@ require "action_controller/railtie"
 require "action_view/railtie"
 
 require "well_formed"
+require "well_formed/railtie"
 require "simple_form"
 require "halitosis"
 
