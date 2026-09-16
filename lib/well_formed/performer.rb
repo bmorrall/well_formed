@@ -62,6 +62,11 @@ module WellFormed
         super
         subclass.prepend(Abstract)
       end
+
+      # Shorthand for `new(...).submit!`.
+      def call(...)
+        new(...).submit!
+      end
     end
 
     def submit!

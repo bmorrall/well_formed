@@ -447,6 +447,12 @@ form.submit   # => true if perform ran, false if invalid or halted by before_per
 form.submit!  # raises WellFormed::RecordInvalid if invalid or before_perform halts
 ```
 
+`.call` is shorthand for `new(...).submit!`:
+
+```ruby
+PublishArticleForm.call(article, current_user, { notify_subscribers: true })
+```
+
 ### PORO resources
 
 `ActionForm` also works when the resource is a plain Ruby object — a value object, a service struct, an API client payload — since it provides `persisted?`, `id`, and `to_param` on the form itself and never calls `save` on the resource.
