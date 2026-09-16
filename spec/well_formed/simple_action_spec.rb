@@ -108,4 +108,14 @@ RSpec.describe WellFormed::SimpleAction do
       expect { form.submit! }.to raise_error(WellFormed::RecordInvalid, /Validation failed.*Message/)
     end
   end
+
+  describe ".call" do
+    it "is shorthand for new(...).submit!" do
+      expect(form_class.call(resource, {message: "Hello"})).to be(true)
+    end
+
+    it "raises RecordInvalid when invalid" do
+      expect { form_class.call(resource) }.to raise_error(WellFormed::RecordInvalid, /Validation failed.*Message/)
+    end
+  end
 end

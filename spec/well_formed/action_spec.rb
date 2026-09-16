@@ -185,6 +185,16 @@ RSpec.describe WellFormed::ActionForm do
     end
   end
 
+  describe ".call" do
+    it "is shorthand for new(...).submit!" do
+      expect(form_class.call(resource, user, {reason: "looks good"})).to be(true)
+    end
+
+    it "raises RecordInvalid when invalid" do
+      expect { form_class.call(resource, user) }.to raise_error(WellFormed::RecordInvalid)
+    end
+  end
+
   describe "ReservedMethodGuard" do
     %i[submit submit!].each do |method_name|
       it "raises ArgumentError when a subclass defines ##{method_name}" do
