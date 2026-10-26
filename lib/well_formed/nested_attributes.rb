@@ -110,8 +110,10 @@ module WellFormed
           config = self.class.registered_nested_attributes[name]
 
           if config[:collection]
-            Array(instances).each_with_index do |nested_form, index|
+            Array(instances).each_with_index do |nested_form, position|
               next if nested_form.valid?
+              # Report errors at the submitted index, which differs from position when _destroy rows were skipped
+              index = @_nested_indexes&.dig(name, position) || position
               nested_form.errors.each do |error|
                 attr = :"#{name}[#{index}].#{error.attribute}"
                 if error.type.is_a?(Symbol)
@@ -163,13 +165,16 @@ module WellFormed
 
       if config[:collection]
         attrs_list = raw_attributes.is_a?(Array) ? raw_attributes : Array(raw_attributes).map { |_, v| v }
-        instances = attrs_list.filter_map do |item_attrs|
+        indexes = []
+        instances = attrs_list.each_with_index.filter_map do |item_attrs, index|
           item_attrs = item_attrs.to_h.with_indifferent_access
           next if boolean_type.cast(item_attrs["_destroy"])
 
+          indexes << index
           sub_resource = _find_collection_resource(name, item_attrs)
           _build_nested_form(form_class, sub_resource, item_attrs.except("id", "_destroy"))
         end
+        (@_nested_indexes ||= {})[name] = indexes
         instance_variable_set(:"@#{name}", instances)
       else
         item_attrs = raw_attributes.to_h.with_indifferent_access
