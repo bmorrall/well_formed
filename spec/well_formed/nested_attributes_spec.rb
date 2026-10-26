@@ -357,6 +357,54 @@ RSpec.describe WellFormed::NestedAttributes do
       form = form_class.new(minimal_resource, {customer_name: "Alice"})
       expect(form.line_items).to eq([])
     end
+
+    it "drops blank entries when lazy-loading from the resource" do
+      allow(resource).to receive(:line_items).and_return([nil, "", {}])
+
+      form = form_class.new(resource, {customer_name: "Alice"})
+      expect(form.line_items).to eq([])
+    end
+
+    it "keeps present entries alongside blank ones when lazy-loading from the resource" do
+      line_item = double("line_item", name: "Widget", quantity: 2)
+      allow(resource).to receive(:line_items).and_return([nil, line_item, {}])
+
+      form = form_class.new(resource, {customer_name: "Alice"})
+      expect(form.line_items.length).to eq(1)
+      expect(form.line_items.first.name).to eq("Widget")
+    end
+
+    context "with a presence validation when the resource has only blank entries" do
+      let(:required_form_class) do
+        line_item_form_class
+        stub_const("RequiredOrderForm", Class.new do
+          include WellFormed
+
+          nested_attributes_for :line_items, LineItemForm
+
+          validates :line_items, presence: true
+        end)
+      end
+
+      before { allow(resource).to receive(:line_items).and_return([{}]) }
+
+      it "fails a presence validation on the parent" do
+        form = required_form_class.new(resource, {})
+        expect(form.valid?).to be(false)
+        expect(form.errors.map { |e| e.attribute.to_s }).to include("line_items")
+      end
+
+      it "still builds and validates nested forms assigned through the setter" do
+        form = required_form_class.new(resource, {})
+        form.line_items = [{name: ""}]
+        expect(form.line_items.first).to be_a(LineItemForm)
+        expect(form.valid?).to be(false)
+        expect(form.errors.map { |e| e.attribute.to_s }).to include("line_items[0].name")
+
+        form.line_items = [{name: "Widget", quantity: 1}]
+        expect(form.valid?).to be(true)
+      end
+    end
   end
 
   describe "#save" do
@@ -482,6 +530,20 @@ RSpec.describe WellFormed::NestedAttributes do
       expect(form.address.street).to be_nil
     end
 
+    it "returns nil when lazy-loading an empty hash from the resource" do
+      allow(singular_resource).to receive(:address).and_return({})
+
+      form = singular_form_class.new(singular_resource, {name: "Bob"})
+      expect(form.address).to be_nil
+    end
+
+    it "returns nil when lazy-loading an empty string from the resource" do
+      allow(singular_resource).to receive(:address).and_return("")
+
+      form = singular_form_class.new(singular_resource, {name: "Bob"})
+      expect(form.address).to be_nil
+    end
+
     context "when a singular nested form error has a non-Symbol type" do
       it "propagates the error message directly (singular)" do
         fake_error = double("error", type: 42, message: "is wrong", attribute: :street, options: {})
@@ -494,6 +556,38 @@ RSpec.describe WellFormed::NestedAttributes do
         form.valid?
 
         expect(form.errors.map { |e| e.attribute.to_s }).to include("address.street")
+      end
+    end
+
+    context "with a presence validation when the resource has a blank value" do
+      let(:required_form_class) do
+        address_form_class
+        stub_const("RequiredUserForm", Class.new do
+          include WellFormed
+
+          nested_attribute_for :address, AddressForm
+
+          validates :address, presence: true
+        end)
+      end
+
+      before { allow(singular_resource).to receive(:address).and_return({}) }
+
+      it "fails a presence validation on the parent" do
+        form = required_form_class.new(singular_resource, {})
+        expect(form.valid?).to be(false)
+        expect(form.errors.map { |e| e.attribute.to_s }).to include("address")
+      end
+
+      it "still builds and validates a nested form assigned through the setter" do
+        form = required_form_class.new(singular_resource, {})
+        form.address = {street: ""}
+        expect(form.address).to be_a(AddressForm)
+        expect(form.valid?).to be(false)
+        expect(form.errors.map { |e| e.attribute.to_s }).to include("address.street")
+
+        form.address = {street: "123 Main St"}
+        expect(form.valid?).to be(true)
       end
     end
   end

@@ -84,9 +84,9 @@ module WellFormed
           elsif resource.respond_to?(name)
             raw = resource.public_send(name)
             if collection
-              Array(raw).map { |r| _build_nested_form(form_class, r) }
+              Array(raw).compact_blank.map { |r| _build_nested_form(form_class, r) }
             else
-              raw ? _build_nested_form(form_class, raw) : nil
+              raw.present? ? _build_nested_form(form_class, raw) : nil
             end
           else
             collection ? [] : nil
