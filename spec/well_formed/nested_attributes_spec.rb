@@ -233,6 +233,20 @@ RSpec.describe WellFormed::NestedAttributes do
         })
         expect(form.valid?).to be(false)
       end
+
+      it "reports errors at the submitted index when earlier items are destroyed" do
+        form = form_class.new(resource, {
+          customer_name: "Alice",
+          line_items_attributes: [
+            {name: "Gizmo", quantity: 1, _destroy: "1"},
+            {name: "", quantity: 2}
+          ]
+        })
+        form.valid?
+        error_attributes = form.errors.map { |e| e.attribute.to_s }
+        expect(error_attributes).to include("line_items[1].name")
+        expect(error_attributes).not_to include("line_items[0].name")
+      end
     end
 
     context "with multiple nested items" do
@@ -299,6 +313,20 @@ RSpec.describe WellFormed::NestedAttributes do
           line_items_attributes: {"0" => {name: "", quantity: 0, _destroy: "1"}}
         })
         expect(form.valid?).to be(true)
+      end
+
+      it "reports errors at the submitted index when earlier items are destroyed" do
+        form = form_class.new(resource, {
+          customer_name: "Alice",
+          line_items_attributes: {
+            "0" => {name: "Gizmo", quantity: 1, _destroy: "1"},
+            "1" => {name: "", quantity: 0}
+          }
+        })
+        form.valid?
+        error_attributes = form.errors.map { |e| e.attribute.to_s }
+        expect(error_attributes).to include("line_items[1].name")
+        expect(error_attributes).not_to include("line_items[0].name")
       end
     end
   end
