@@ -14,9 +14,9 @@ jobs:
     strategy:
       matrix:
         ruby:
-          - "3.3.11"
-          - "3.4.9"
-          - "4.0.4"
+          - "3.3.13"
+          - "3.4.12"
+          - "4.0.9"
         rails:
           - "7.2"
           - "8.0"
@@ -41,9 +41,9 @@ jobs:
     strategy:
       matrix:
         ruby:
-          - "3.3.11"
-          - "3.4.9"
-          - "4.0.4"
+          - "3.3.13"
+          - "3.4.12"
+          - "4.0.9"
         gem:
           - well_formed-dry_types
           - well_formed-paper_trail
@@ -70,7 +70,7 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: "3.4.9"
+          ruby-version: "3.4.12"
           bundler-cache: true
       - name: Validate RBS signatures
         run: bundle exec rbs validate sig/well_formed.rbs
@@ -84,7 +84,7 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: "3.4.9"
+          ruby-version: "3.4.12"
           bundler-cache: true
       - name: Install RBS collection
         run: bundle exec rbs collection install
