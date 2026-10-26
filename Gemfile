@@ -13,6 +13,8 @@ gem "simplecov", require: false
 
 rails_version = ENV["RAILS_VERSION"]
 gem "rails", rails_version ? "~> #{rails_version}.0" : ">= 7.2"
+# Rails < 8.1 passes quirks_mode to JSON, which json 3.0 rejects as an unknown option
+gem "json", "< 3" if %w[7.2 8.0].include?(rails_version)
 gem "sqlite3"
 gem "rspec-rails"
 gem "capybara"
