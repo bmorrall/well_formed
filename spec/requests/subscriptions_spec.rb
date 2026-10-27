@@ -3,42 +3,31 @@
 require "rails_helper"
 
 RSpec.describe "Subscriptions", type: :request do
-  describe "GET /subscription/new" do
-    it "returns 200" do
-      get "/subscription/new"
+  describe "GET /subscription/new", :aggregate_failures do
+    it "renders a form for a new subscription" do
+      get new_subscription_path
+
       expect(response).to have_http_status(:ok)
-    end
 
-    it "renders a form posting to /subscription" do
-      get "/subscription/new"
-      expect(response.body).to have_selector('form[action="/subscription"]')
-    end
-
-    it "renders the name and email fields" do
-      get "/subscription/new"
+      expect(response.body).to have_css("form[action='#{subscription_path}']")
       expect(response.body).to have_field("subscription[name]")
       expect(response.body).to have_field("subscription[email]")
     end
   end
 
-  describe "POST /subscription" do
-    context "with valid params" do
-      it "returns 201" do
-        post "/subscription", params: {subscription: {name: "Alice", email: "alice@example.com"}}
-        expect(response).to have_http_status(:created)
-      end
+  describe "POST /subscription", :aggregate_failures do
+    it "subscribes" do
+      post subscription_path, params: {subscription: {name: "Alice", email: "alice@example.com"}}
+
+      expect(response).to have_http_status(:created)
     end
 
-    context "with invalid params" do
-      it "returns 422" do
-        post "/subscription", params: {subscription: {name: "", email: ""}}
-        expect(response).to have_http_status(:unprocessable_content)
-      end
+    it "re-renders the form when the subscription is invalid" do
+      post subscription_path, params: {subscription: {name: "", email: ""}}
 
-      it "re-renders the form" do
-        post "/subscription", params: {subscription: {name: "", email: ""}}
-        expect(response.body).to have_selector('form[action="/subscription"]')
-      end
+      expect(response).to have_http_status(:unprocessable_content)
+
+      expect(response.body).to have_css("form[action='#{subscription_path}']")
     end
   end
 end

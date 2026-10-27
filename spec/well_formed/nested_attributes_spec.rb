@@ -1,156 +1,112 @@
 # frozen_string_literal: true
 
 RSpec.describe WellFormed::NestedAttributes do
-  let(:line_item_form_class) do
-    stub_const("LineItemForm", Class.new do
-      include WellFormed
-
-      attribute :name, :string
-      attribute :quantity, :integer
-
-      validates :name, presence: true
-      validates :quantity, numericality: {greater_than: 0}
-    end)
-  end
-
-  let(:form_class) do
-    line_item_form_class
-    stub_const("OrderForm", Class.new do
-      include WellFormed
-
-      attribute :customer_name, :string
-
-      validates :customer_name, presence: true
-
-      nested_attributes_for :line_items, LineItemForm
-
-      private
-
-      def perform
-        resource.save
-      end
-    end)
-  end
-
-  let(:resource) do
-    Class.new do
-      attr_accessor :customer_name
-      attr_reader :line_items_attributes_assigned
-
-      def line_items_attributes=(attrs)
-        @line_items_attributes_assigned = attrs
-      end
-
-      def line_items
-        []
-      end
-
-      def assign_attributes(attrs)
-        attrs.each { |k, v| public_send(:"#{k}=", v) }
-      end
-
-      def save
-        true
-      end
-    end.new
-  end
-
   describe ".nested_attributes_for" do
     it "defines an attribute reader for the association name" do
-      form = form_class.new(resource, {customer_name: "Alice"})
+      form = an_order_form_class.new(an_order_resource, {customer_name: "Alice"})
+
       expect(form).to respond_to(:line_items)
     end
 
     it "defines a name_attributes= setter" do
-      expect(form_class.new(resource, {})).to respond_to(:line_items_attributes=)
+      form = an_order_form_class.new(an_order_resource, {})
+
+      expect(form).to respond_to(:line_items_attributes=)
     end
 
     it "defines a name= setter (API style, no suffix)" do
-      expect(form_class.new(resource, {})).to respond_to(:line_items=)
+      form = an_order_form_class.new(an_order_resource, {})
+
+      expect(form).to respond_to(:line_items=)
     end
 
     it "raises ArgumentError when both a form_class and a block are given" do
-      klass = line_item_form_class
+      line_item_form_class = a_line_item_form_class
+
       expect {
         Class.new do
           include WellFormed
 
-          nested_attributes_for :line_items, klass do
+          nested_attributes_for :line_items, line_item_form_class do
             attribute :name, :string
           end
         end
-      }.to raise_error(ArgumentError)
+      }.to raise_error(ArgumentError, /not both/)
+    end
+
+    it "raises ArgumentError when neither a form_class nor a block is given" do
+      expect {
+        Class.new do
+          include WellFormed
+
+          nested_attributes_for :line_items
+        end
+      }.to raise_error(ArgumentError, /A form_class or block is required/)
     end
   end
 
   describe "inline block (anonymous form class)" do
-    let(:inline_form_class) do
-      line_item_form_class
-      stub_const("InlineOrderForm", Class.new do
-        include WellFormed
-
-        attribute :customer_name, :string
-
-        nested_attributes_for :line_items do
-          attribute :name, :string
-          validates :name, presence: true
-        end
-      end)
-    end
-
     it "registers an anonymous form class for the nested association" do
-      expect(inline_form_class.registered_nested_attributes[:line_items][:form_class]).to be_a(Class)
+      form_class = an_inline_order_form_class
+
+      nested_form_class = form_class.registered_nested_attributes[:line_items][:form_class]
+
+      expect(nested_form_class).to be_a(Class)
     end
 
     it "assigns a synthetic model_name based on the association name" do
-      klass = inline_form_class.registered_nested_attributes[:line_items][:form_class]
-      expect(klass.model_name.name).to eq("LineItem")
+      form_class = an_inline_order_form_class
+
+      nested_form_class = form_class.registered_nested_attributes[:line_items][:form_class]
+
+      expect(nested_form_class.model_name.name).to eq("LineItem")
     end
 
     it "validates using the inline block's validators" do
-      form = inline_form_class.new(resource, {
+      form = an_inline_order_form_class.new(an_order_resource, {
         customer_name: "Alice",
         line_items_attributes: [{name: ""}]
       })
+
       expect(form.valid?).to be(false)
-      expect(form.errors.map { |e| e.attribute.to_s }).to include("line_items[0].name")
+      expect(form.errors[:"line_items[0].name"]).to include("can't be blank")
     end
 
     it "passes when the inline block validators are satisfied" do
-      form = inline_form_class.new(resource, {
+      form = an_inline_order_form_class.new(an_order_resource, {
         customer_name: "Alice",
         line_items_attributes: [{name: "Widget"}]
       })
+
       expect(form.valid?).to be(true)
     end
   end
 
   describe "#valid?" do
-    context "when no nested attributes are provided" do
-      it "validates only the parent form" do
-        form = form_class.new(resource, {customer_name: "Alice"})
-        expect(form.valid?).to be(true)
-      end
+    it "validates only the parent form when no nested attributes are provided" do
+      form = an_order_form_class.new(an_order_resource, {customer_name: "Alice"})
 
-      it "returns false when the parent is invalid" do
-        form = form_class.new(resource, {customer_name: ""})
-        expect(form.valid?).to be(false)
-      end
+      expect(form.valid?).to be(true)
     end
 
-    context "when all nested forms are valid" do
-      it "returns true" do
-        form = form_class.new(resource, {
-          customer_name: "Alice",
-          line_items_attributes: [{name: "Widget", quantity: 2}]
-        })
-        expect(form.valid?).to be(true)
-      end
+    it "returns false when the parent is invalid and no nested attributes are provided" do
+      form = an_order_form_class.new(an_order_resource, {customer_name: ""})
+
+      expect(form.valid?).to be(false)
+    end
+
+    it "returns true when all nested forms are valid" do
+      form = an_order_form_class.new(an_order_resource, {
+        customer_name: "Alice",
+        line_items_attributes: [{name: "Widget", quantity: 2}]
+      })
+
+      expect(form.valid?).to be(true)
     end
 
     context "when a nested form is invalid" do
       subject(:form) do
-        form_class.new(resource, {
+        an_order_form_class.new(an_order_resource, {
           customer_name: "Alice",
           line_items_attributes: [{name: "", quantity: 2}]
         })
@@ -162,459 +118,467 @@ RSpec.describe WellFormed::NestedAttributes do
 
       it "adds indexed errors from the nested form to the parent" do
         form.valid?
-        error_attributes = form.errors.map { |e| e.attribute.to_s }
-        expect(error_attributes).to include("line_items[0].name")
+
+        expect(form.errors.attribute_names).to include(:"line_items[0].name")
       end
 
       it "includes the nested form error message" do
         form.valid?
-        error = form.errors.find { |e| e.attribute.to_s == "line_items[0].name" }
-        expect(error.message).to eq("can't be blank")
+
+        expect(form.errors[:"line_items[0].name"]).to eq(["can't be blank"])
       end
     end
 
-    context "when both parent and nested form are invalid" do
-      it "returns false and includes errors from both" do
-        form = form_class.new(resource, {
-          customer_name: "",
-          line_items_attributes: [{name: "", quantity: 2}]
-        })
-        form.valid?
-        expect(form.errors[:customer_name]).not_to be_empty
-        expect(form.errors.map { |e| e.attribute.to_s }).to include("line_items[0].name")
-      end
+    it "returns false and includes errors from both when the parent and a nested form are invalid" do
+      form = an_order_form_class.new(an_order_resource, {
+        customer_name: "",
+        line_items_attributes: [{name: "", quantity: 2}]
+      })
+
+      form.valid?
+
+      expect(form.errors[:customer_name]).to include("can't be blank")
+      expect(form.errors[:"line_items[0].name"]).to include("can't be blank")
     end
 
-    context "when a nested form error has a non-Symbol type" do
-      it "propagates the error message directly (collection)" do
-        fake_error = double("error", type: 42, message: "is wrong", attribute: :name, options: {})
-        fake_nested_form = double("nested_form")
-        allow(fake_nested_form).to receive(:valid?).and_return(false)
-        allow(fake_nested_form).to receive(:errors).and_return([fake_error])
+    it "copies a nested error added with a message string (non-Symbol type) onto the indexed attribute" do
+      form_class = Class.new do
+        include WellFormed
 
-        form = form_class.new(resource, {customer_name: "Alice"})
-        form.instance_variable_set(:@line_items, [fake_nested_form])
-        form.valid?
+        nested_attributes_for :line_items do
+          attribute :name, :string
 
-        expect(form.errors.map { |e| e.attribute.to_s }).to include("line_items[0].name")
+          validate { errors.add(:name, "is wrong") }
+        end
       end
+      form = form_class.new(an_order_resource, {line_items_attributes: [{name: "Widget"}]})
+
+      expect(form.valid?).to be(false)
+      expect(form.errors[:"line_items[0].name"]).to eq(["is wrong"])
     end
 
-    context "when nested attrs are provided via name= (API style)" do
-      it "validates the nested forms" do
-        form = form_class.new(resource, {customer_name: "Alice"})
-        form.line_items = [{name: "", quantity: 2}]
-        expect(form.valid?).to be(false)
-        expect(form.errors.map { |e| e.attribute.to_s }).to include("line_items[0].name")
-      end
+    it "validates the nested forms when nested attrs are provided via name= (API style)" do
+      form = an_order_form_class.new(an_order_resource, {customer_name: "Alice"})
+
+      form.line_items = [{name: "", quantity: 2}]
+
+      expect(form.valid?).to be(false)
+      expect(form.errors[:"line_items[0].name"]).to include("can't be blank")
     end
 
-    context "with _destroy flag" do
-      it "skips validation for items marked with _destroy: true" do
-        form = form_class.new(resource, {
-          customer_name: "Alice",
-          line_items_attributes: [{name: "", quantity: 2, _destroy: true}]
-        })
-        expect(form.valid?).to be(true)
-      end
+    it "skips validation for items marked with _destroy: true" do
+      form = an_order_form_class.new(an_order_resource, {
+        customer_name: "Alice",
+        line_items_attributes: [{name: "", quantity: 2, _destroy: true}]
+      })
 
-      it "skips validation for items marked with _destroy: '1'" do
-        form = form_class.new(resource, {
-          customer_name: "Alice",
-          line_items_attributes: [{name: "", quantity: 2, _destroy: "1"}]
-        })
-        expect(form.valid?).to be(true)
-      end
-
-      it "validates items where _destroy is false" do
-        form = form_class.new(resource, {
-          customer_name: "Alice",
-          line_items_attributes: [{name: "", quantity: 2, _destroy: false}]
-        })
-        expect(form.valid?).to be(false)
-      end
-
-      it "reports errors at the submitted index when earlier items are destroyed" do
-        form = form_class.new(resource, {
-          customer_name: "Alice",
-          line_items_attributes: [
-            {name: "Gizmo", quantity: 1, _destroy: "1"},
-            {name: "", quantity: 2}
-          ]
-        })
-        form.valid?
-        error_attributes = form.errors.map { |e| e.attribute.to_s }
-        expect(error_attributes).to include("line_items[1].name")
-        expect(error_attributes).not_to include("line_items[0].name")
-      end
+      expect(form.valid?).to be(true)
     end
 
-    context "with multiple nested items" do
-      it "reports errors per item index" do
-        form = form_class.new(resource, {
-          customer_name: "Alice",
-          line_items_attributes: [
-            {name: "Widget", quantity: 2},
-            {name: "", quantity: 0}
-          ]
-        })
-        form.valid?
-        error_attributes = form.errors.map { |e| e.attribute.to_s }
-        expect(error_attributes).not_to include("line_items[0].name")
-        expect(error_attributes).to include("line_items[1].name")
-        expect(error_attributes).to include("line_items[1].quantity")
-      end
+    it "skips validation for items marked with _destroy: '1'" do
+      form = an_order_form_class.new(an_order_resource, {
+        customer_name: "Alice",
+        line_items_attributes: [{name: "", quantity: 2, _destroy: "1"}]
+      })
+
+      expect(form.valid?).to be(true)
     end
 
-    context "when attributes are submitted as a hash with string integer keys (HTML form encoding)" do
-      it "builds nested form instances" do
-        form = form_class.new(resource, {
-          customer_name: "Alice",
-          line_items_attributes: {"0" => {name: "Widget", quantity: 2}}
-        })
-        expect(form.line_items.length).to eq(1)
-        expect(form.line_items.first.name).to eq("Widget")
-      end
+    it "validates items where _destroy is false" do
+      form = an_order_form_class.new(an_order_resource, {
+        customer_name: "Alice",
+        line_items_attributes: [{name: "", quantity: 2, _destroy: false}]
+      })
 
-      it "returns true when nested forms are valid" do
-        form = form_class.new(resource, {
-          customer_name: "Alice",
-          line_items_attributes: {"0" => {name: "Widget", quantity: 2}}
-        })
-        expect(form.valid?).to be(true)
-      end
+      expect(form.valid?).to be(false)
+    end
 
-      it "returns false when a nested form is invalid" do
-        form = form_class.new(resource, {
-          customer_name: "Alice",
-          line_items_attributes: {"0" => {name: "", quantity: 0}}
-        })
-        expect(form.valid?).to be(false)
-        expect(form.errors.map { |e| e.attribute.to_s }).to include("line_items[0].name")
-      end
+    it "reports errors at the submitted index when earlier items are destroyed" do
+      form = an_order_form_class.new(an_order_resource, {
+        customer_name: "Alice",
+        line_items_attributes: [
+          {name: "Gizmo", quantity: 1, _destroy: "1"},
+          {name: "", quantity: 2}
+        ]
+      })
 
-      it "reports errors at the correct index for multiple items" do
-        form = form_class.new(resource, {
-          customer_name: "Alice",
-          line_items_attributes: {
-            "0" => {name: "Widget", quantity: 2},
-            "1" => {name: "", quantity: 0}
-          }
-        })
-        form.valid?
-        error_attributes = form.errors.map { |e| e.attribute.to_s }
-        expect(error_attributes).not_to include("line_items[0].name")
-        expect(error_attributes).to include("line_items[1].name")
-      end
+      form.valid?
 
-      it "skips items marked with _destroy" do
-        form = form_class.new(resource, {
-          customer_name: "Alice",
-          line_items_attributes: {"0" => {name: "", quantity: 0, _destroy: "1"}}
-        })
-        expect(form.valid?).to be(true)
-      end
+      expect(form.errors.attribute_names).to include(:"line_items[1].name")
+      expect(form.errors.attribute_names).not_to include(:"line_items[0].name")
+    end
 
-      it "reports errors at the submitted index when earlier items are destroyed" do
-        form = form_class.new(resource, {
-          customer_name: "Alice",
-          line_items_attributes: {
-            "0" => {name: "Gizmo", quantity: 1, _destroy: "1"},
-            "1" => {name: "", quantity: 0}
-          }
-        })
-        form.valid?
-        error_attributes = form.errors.map { |e| e.attribute.to_s }
-        expect(error_attributes).to include("line_items[1].name")
-        expect(error_attributes).not_to include("line_items[0].name")
-      end
+    it "reports errors per item index for multiple nested items" do
+      form = an_order_form_class.new(an_order_resource, {
+        customer_name: "Alice",
+        line_items_attributes: [
+          {name: "Widget", quantity: 2},
+          {name: "", quantity: 0}
+        ]
+      })
+
+      form.valid?
+
+      expect(form.errors.attribute_names).not_to include(:"line_items[0].name")
+      expect(form.errors[:"line_items[1].name"]).to include("can't be blank")
+      expect(form.errors[:"line_items[1].quantity"]).to include("must be greater than 0")
+    end
+
+    it "builds nested form instances from a hash with string integer keys (HTML form encoding)" do
+      form = an_order_form_class.new(an_order_resource, {
+        customer_name: "Alice",
+        line_items_attributes: {"0" => {name: "Widget", quantity: 2}}
+      })
+
+      expect(form.line_items.length).to eq(1)
+      expect(form.line_items.first.name).to eq("Widget")
+    end
+
+    it "returns true when nested forms submitted as a string-keyed hash are valid" do
+      form = an_order_form_class.new(an_order_resource, {
+        customer_name: "Alice",
+        line_items_attributes: {"0" => {name: "Widget", quantity: 2}}
+      })
+
+      expect(form.valid?).to be(true)
+    end
+
+    it "returns false when a nested form submitted as a string-keyed hash is invalid" do
+      form = an_order_form_class.new(an_order_resource, {
+        customer_name: "Alice",
+        line_items_attributes: {"0" => {name: "", quantity: 0}}
+      })
+
+      expect(form.valid?).to be(false)
+      expect(form.errors[:"line_items[0].name"]).to include("can't be blank")
+    end
+
+    it "reports errors at the correct index for multiple items submitted as a string-keyed hash" do
+      form = an_order_form_class.new(an_order_resource, {
+        customer_name: "Alice",
+        line_items_attributes: {
+          "0" => {name: "Widget", quantity: 2},
+          "1" => {name: "", quantity: 0}
+        }
+      })
+
+      form.valid?
+
+      expect(form.errors.attribute_names).not_to include(:"line_items[0].name")
+      expect(form.errors.attribute_names).to include(:"line_items[1].name")
+    end
+
+    it "skips items marked with _destroy submitted as a string-keyed hash" do
+      form = an_order_form_class.new(an_order_resource, {
+        customer_name: "Alice",
+        line_items_attributes: {"0" => {name: "", quantity: 0, _destroy: "1"}}
+      })
+
+      expect(form.valid?).to be(true)
+    end
+
+    it "reports errors at the submitted index when earlier items submitted as a string-keyed hash are destroyed" do
+      form = an_order_form_class.new(an_order_resource, {
+        customer_name: "Alice",
+        line_items_attributes: {
+          "0" => {name: "Gizmo", quantity: 1, _destroy: "1"},
+          "1" => {name: "", quantity: 0}
+        }
+      })
+
+      form.valid?
+
+      expect(form.errors.attribute_names).to include(:"line_items[1].name")
+      expect(form.errors.attribute_names).not_to include(:"line_items[0].name")
     end
   end
 
   describe "#line_items" do
     it "returns an array of nested form instances" do
-      form = form_class.new(resource, {
+      form = an_order_form_class.new(an_order_resource, {
         customer_name: "Alice",
         line_items_attributes: [{name: "Widget", quantity: 2}]
       })
+
       expect(form.line_items).to be_a(Array)
       expect(form.line_items.length).to eq(1)
       expect(form.line_items.first).to be_a(LineItemForm)
     end
 
     it "populates nested form attributes from the provided params" do
-      form = form_class.new(resource, {
+      form = an_order_form_class.new(an_order_resource, {
         customer_name: "Alice",
         line_items_attributes: [{name: "Widget", quantity: 3}]
       })
+
       expect(form.line_items.first.name).to eq("Widget")
       expect(form.line_items.first.quantity).to eq(3)
     end
 
     it "excludes items marked for destruction" do
-      form = form_class.new(resource, {
+      form = an_order_form_class.new(an_order_resource, {
         customer_name: "Alice",
         line_items_attributes: [
           {name: "Widget", quantity: 2},
           {name: "Gizmo", quantity: 1, _destroy: "1"}
         ]
       })
+
       expect(form.line_items.length).to eq(1)
       expect(form.line_items.first.name).to eq("Widget")
     end
 
     it "returns an empty array when no attributes are provided" do
-      form = form_class.new(resource, {customer_name: "Alice"})
+      form = an_order_form_class.new(an_order_resource, {customer_name: "Alice"})
+
       expect(form.line_items).to eq([])
     end
 
     it "lazy-loads from the resource when no setter has been called" do
-      line_item = double("line_item", name: "Widget", quantity: 2)
-      allow(resource).to receive(:line_items).and_return([line_item])
+      resource = an_order_resource(line_items: [a_line_item(name: "Widget", quantity: 2)])
 
-      form = form_class.new(resource, {customer_name: "Alice"})
+      form = an_order_form_class.new(resource, {customer_name: "Alice"})
+
       expect(form.line_items.length).to eq(1)
       expect(form.line_items.first).to be_a(LineItemForm)
       expect(form.line_items.first.name).to eq("Widget")
+      expect(form.line_items.first.quantity).to eq(2)
     end
 
     it "returns an empty array when the resource does not respond to the association" do
-      minimal_resource = double("minimal_resource")
-      allow(minimal_resource).to receive(:respond_to?).and_return(false)
+      resource = Object.new
 
-      form = form_class.new(minimal_resource, {customer_name: "Alice"})
+      form = an_order_form_class.new(resource, {customer_name: "Alice"})
+
       expect(form.line_items).to eq([])
     end
 
     it "drops blank entries when lazy-loading from the resource" do
-      allow(resource).to receive(:line_items).and_return([nil, "", {}])
+      resource = an_order_resource(line_items: [nil, "", {}])
 
-      form = form_class.new(resource, {customer_name: "Alice"})
+      form = an_order_form_class.new(resource, {customer_name: "Alice"})
+
       expect(form.line_items).to eq([])
     end
 
     it "keeps present entries alongside blank ones when lazy-loading from the resource" do
-      line_item = double("line_item", name: "Widget", quantity: 2)
-      allow(resource).to receive(:line_items).and_return([nil, line_item, {}])
+      resource = an_order_resource(line_items: [nil, a_line_item(name: "Widget", quantity: 2), {}])
 
-      form = form_class.new(resource, {customer_name: "Alice"})
+      form = an_order_form_class.new(resource, {customer_name: "Alice"})
+
       expect(form.line_items.length).to eq(1)
       expect(form.line_items.first.name).to eq("Widget")
     end
 
     context "with a presence validation when the resource has only blank entries" do
       let(:required_form_class) do
-        line_item_form_class
+        line_item_form_class = a_line_item_form_class
+
         stub_const("RequiredOrderForm", Class.new do
           include WellFormed
 
-          nested_attributes_for :line_items, LineItemForm
+          nested_attributes_for :line_items, line_item_form_class
 
           validates :line_items, presence: true
         end)
       end
 
-      before { allow(resource).to receive(:line_items).and_return([{}]) }
+      let(:resource) { an_order_resource(line_items: [{}]) }
 
       it "fails a presence validation on the parent" do
         form = required_form_class.new(resource, {})
+
         expect(form.valid?).to be(false)
-        expect(form.errors.map { |e| e.attribute.to_s }).to include("line_items")
+        expect(form.errors[:line_items]).to include("can't be blank")
       end
 
       it "still builds and validates nested forms assigned through the setter" do
         form = required_form_class.new(resource, {})
+
         form.line_items = [{name: ""}]
+
         expect(form.line_items.first).to be_a(LineItemForm)
         expect(form.valid?).to be(false)
-        expect(form.errors.map { |e| e.attribute.to_s }).to include("line_items[0].name")
+        expect(form.errors[:"line_items[0].name"]).to include("can't be blank")
 
         form.line_items = [{name: "Widget", quantity: 1}]
+
         expect(form.valid?).to be(true)
       end
     end
   end
 
-  describe "#save" do
-    it "delegates nested attributes to the resource immediately via the setter" do
-      form_class.new(resource, {
-        customer_name: "Alice",
-        line_items_attributes: [{name: "Widget", quantity: 2}]
-      })
-      expect(resource.line_items_attributes_assigned).to eq([{name: "Widget", quantity: 2}])
-    end
+  describe "#line_items_attributes=" do
+    it "delegates nested attributes to the resource immediately" do
+      resource = an_order_resource
+      line_items_attributes = [{name: "Widget", quantity: 2}]
 
+      an_order_form_class.new(resource, {customer_name: "Alice", line_items_attributes:})
+
+      expect(resource.line_items_attributes_assigned).to eq(line_items_attributes)
+    end
+  end
+
+  describe "#save" do
     it "passes the original attributes including _destroy through to the resource" do
-      form = form_class.new(resource, {
+      resource = an_order_resource
+      form = an_order_form_class.new(resource, {
         customer_name: "Alice",
         line_items_attributes: [{name: "Widget", quantity: 2, _destroy: "1"}]
       })
+
       form.save
-      raw = resource.line_items_attributes_assigned
-      expect(raw.first).to include(_destroy: "1")
+
+      expect(resource.line_items_attributes_assigned.first).to include(_destroy: "1")
     end
 
     it "does not save when a nested form is invalid" do
-      form = form_class.new(resource, {
+      form = an_order_form_class.new(an_order_resource, {
         customer_name: "Alice",
         line_items_attributes: [{name: "", quantity: 2}]
       })
+
       expect(form.save).to be(false)
     end
   end
 
   describe "_find_collection_resource rescue" do
-    it "returns nil and builds the nested form without a backing record when the collection fetch raises" do
+    it "builds the nested form without a backing record when the collection fetch raises" do
+      resource = an_order_resource
       allow(resource).to receive(:line_items).and_raise(StandardError)
 
-      form = form_class.new(resource, {
+      form = an_order_form_class.new(resource, {
         customer_name: "Alice",
         line_items_attributes: [{"id" => "1", "name" => "Widget", "quantity" => "2"}]
       })
+
       expect(form.line_items.length).to eq(1)
       expect(form.line_items.first.name).to eq("Widget")
     end
   end
 
   describe "singular nested form (nested_attribute_for)" do
-    let(:address_form_class) do
-      stub_const("AddressForm", Class.new do
-        include WellFormed
-
-        attribute :street, :string
-        validates :street, presence: true
-      end)
-    end
-
-    let(:singular_form_class) do
-      address_form_class
-      stub_const("UserForm", Class.new do
-        include WellFormed
-
-        attribute :name, :string
-
-        nested_attribute_for :address, AddressForm
-      end)
-    end
-
-    let(:address_record) { double("address", street: nil) }
-    let(:singular_resource) do
-      r = double("resource")
-      allow(r).to receive(:respond_to?).and_return(false)
-      allow(r).to receive(:respond_to?).with(:address).and_return(true)
-      allow(r).to receive(:respond_to?).with(:address_attributes=).and_return(true)
-      allow(r).to receive(:respond_to?).with(:assign_attributes).and_return(true)
-      allow(r).to receive(:address).and_return(address_record)
-      allow(r).to receive(:assign_attributes)
-      allow(r).to receive(:address_attributes=)
-      allow(r).to receive(:save).and_return(true)
-      r
-    end
-
     it "builds a single nested form instance" do
-      form = singular_form_class.new(singular_resource, {
+      form = a_user_form_class.new(a_user_resource, {
         name: "Bob",
         address_attributes: {street: "123 Main St"}
       })
+
       expect(form.address).to be_a(AddressForm)
     end
 
     it "returns false when the singular nested form is invalid" do
-      form = singular_form_class.new(singular_resource, {
+      form = a_user_form_class.new(a_user_resource, {
         name: "Bob",
         address_attributes: {street: ""}
       })
+
       expect(form.valid?).to be(false)
     end
 
     it "adds errors with the association name prefix" do
-      form = singular_form_class.new(singular_resource, {
+      form = a_user_form_class.new(a_user_resource, {
         name: "Bob",
         address_attributes: {street: ""}
       })
+
       form.valid?
-      error_attributes = form.errors.map { |e| e.attribute.to_s }
-      expect(error_attributes).to include("address.street")
+
+      expect(form.errors[:"address.street"]).to include("can't be blank")
     end
 
     it "returns true when the singular nested form is valid" do
-      form = singular_form_class.new(singular_resource, {
+      form = a_user_form_class.new(a_user_resource, {
         name: "Bob",
         address_attributes: {street: "123 Main St"}
       })
+
       expect(form.valid?).to be(true)
     end
 
     it "accepts params via the name= setter (API style)" do
-      form = singular_form_class.new(singular_resource, {})
+      form = a_user_form_class.new(a_user_resource, {})
+
       form.address = {street: ""}
+
       expect(form.valid?).to be(false)
-      expect(form.errors.map { |e| e.attribute.to_s }).to include("address.street")
+      expect(form.errors[:"address.street"]).to include("can't be blank")
     end
 
     it "lazy-loads from the resource when no address_attributes are provided" do
-      form = singular_form_class.new(singular_resource, {name: "Bob"})
+      resource = a_user_resource(address: an_address(street: "123 Main St"))
+
+      form = a_user_form_class.new(resource, {name: "Bob"})
+
       expect(form.address).to be_a(AddressForm)
-      expect(form.address.street).to be_nil
+      expect(form.address.street).to eq("123 Main St")
     end
 
     it "returns nil when lazy-loading an empty hash from the resource" do
-      allow(singular_resource).to receive(:address).and_return({})
+      resource = a_user_resource(address: {})
 
-      form = singular_form_class.new(singular_resource, {name: "Bob"})
+      form = a_user_form_class.new(resource, {name: "Bob"})
+
       expect(form.address).to be_nil
     end
 
     it "returns nil when lazy-loading an empty string from the resource" do
-      allow(singular_resource).to receive(:address).and_return("")
+      resource = a_user_resource(address: "")
 
-      form = singular_form_class.new(singular_resource, {name: "Bob"})
+      form = a_user_form_class.new(resource, {name: "Bob"})
+
       expect(form.address).to be_nil
     end
 
-    context "when a singular nested form error has a non-Symbol type" do
-      it "propagates the error message directly (singular)" do
-        fake_error = double("error", type: 42, message: "is wrong", attribute: :street, options: {})
-        fake_address_form = double("address_form")
-        allow(fake_address_form).to receive(:valid?).and_return(false)
-        allow(fake_address_form).to receive(:errors).and_return([fake_error])
+    it "copies a nested error added with a message string (non-Symbol type) onto the prefixed attribute" do
+      form_class = Class.new do
+        include WellFormed
 
-        form = singular_form_class.new(singular_resource, {name: "Bob"})
-        form.instance_variable_set(:@address, fake_address_form)
-        form.valid?
+        nested_attribute_for :address do
+          attribute :street, :string
 
-        expect(form.errors.map { |e| e.attribute.to_s }).to include("address.street")
+          validate { errors.add(:street, "is wrong") }
+        end
       end
+      form = form_class.new(a_user_resource, {address_attributes: {street: "123 Main St"}})
+
+      expect(form.valid?).to be(false)
+      expect(form.errors[:"address.street"]).to eq(["is wrong"])
     end
 
     context "with a presence validation when the resource has a blank value" do
       let(:required_form_class) do
-        address_form_class
+        address_form_class = an_address_form_class
+
         stub_const("RequiredUserForm", Class.new do
           include WellFormed
 
-          nested_attribute_for :address, AddressForm
+          nested_attribute_for :address, address_form_class
 
           validates :address, presence: true
         end)
       end
 
-      before { allow(singular_resource).to receive(:address).and_return({}) }
+      let(:resource) { a_user_resource(address: {}) }
 
       it "fails a presence validation on the parent" do
-        form = required_form_class.new(singular_resource, {})
+        form = required_form_class.new(resource, {})
+
         expect(form.valid?).to be(false)
-        expect(form.errors.map { |e| e.attribute.to_s }).to include("address")
+        expect(form.errors[:address]).to include("can't be blank")
       end
 
       it "still builds and validates a nested form assigned through the setter" do
-        form = required_form_class.new(singular_resource, {})
+        form = required_form_class.new(resource, {})
+
         form.address = {street: ""}
+
         expect(form.address).to be_a(AddressForm)
         expect(form.valid?).to be(false)
-        expect(form.errors.map { |e| e.attribute.to_s }).to include("address.street")
+        expect(form.errors[:"address.street"]).to include("can't be blank")
 
         form.address = {street: "123 Main St"}
+
         expect(form.valid?).to be(true)
       end
     end
@@ -622,11 +586,11 @@ RSpec.describe WellFormed::NestedAttributes do
 
   describe "inheritance" do
     it "includes nested attributes from the parent class" do
-      klass = line_item_form_class
+      line_item_form_class = a_line_item_form_class
       base_class = Class.new do
         include WellFormed
 
-        nested_attributes_for :line_items, klass
+        nested_attributes_for :line_items, line_item_form_class
       end
 
       child_class = Class.new(base_class)
@@ -641,12 +605,11 @@ RSpec.describe WellFormed::NestedAttributes do
         attribute :label, :string
         validates :label, presence: true
       end)
-
-      line_items_klass = line_item_form_class
+      line_item_form_class = a_line_item_form_class
       base_class = Class.new do
         include WellFormed
 
-        nested_attributes_for :line_items, line_items_klass
+        nested_attributes_for :line_items, line_item_form_class
       end
 
       child_class = Class.new(base_class) do
@@ -659,31 +622,6 @@ RSpec.describe WellFormed::NestedAttributes do
   end
 
   describe "multi-level nested attributes" do
-    let(:line_item_resource) do
-      Class.new do
-        def dimensions = []
-
-        def dimensions_attributes=(attrs)
-        end
-      end.new
-    end
-
-    let(:deep_resource) do
-      line_item_resource
-      Class.new do
-        def line_items = []
-
-        def line_items_attributes=(attrs)
-        end
-
-        def assign_attributes(attrs)
-          attrs.each { |k, v| public_send(:"#{k}=", v) }
-        end
-
-        def save = true
-      end.new
-    end
-
     context "without user (include WellFormed)" do
       let(:form_class) do
         stub_const("DeepOrderForm", Class.new do
@@ -703,40 +641,44 @@ RSpec.describe WellFormed::NestedAttributes do
       end
 
       it "registers nested attributes on the generated nested form class" do
-        line_item_klass = form_class.registered_nested_attributes[:line_items][:form_class]
-        expect(line_item_klass.registered_nested_attributes).to have_key(:dimensions)
+        line_item_form_class = form_class.registered_nested_attributes[:line_items][:form_class]
+
+        expect(line_item_form_class.registered_nested_attributes).to have_key(:dimensions)
       end
 
       it "propagates deep validation errors to the top-level form" do
-        form = form_class.new(deep_resource, {
+        form = form_class.new(a_deep_order_resource, {
           customer_name: "Alice",
           line_items_attributes: [
             {name: "Widget", dimensions_attributes: [{width: -1}]}
           ]
         })
+
         expect(form.valid?).to be(false)
-        expect(form.errors.map { |e| e.attribute.to_s }).to include("line_items[0].dimensions[0].width")
+        expect(form.errors[:"line_items[0].dimensions[0].width"]).to include("must be greater than 0")
       end
 
       it "is valid when all levels are valid" do
-        form = form_class.new(deep_resource, {
+        form = form_class.new(a_deep_order_resource, {
           customer_name: "Alice",
           line_items_attributes: [
             {name: "Widget", dimensions_attributes: [{width: 10}]}
           ]
         })
+
         expect(form.valid?).to be(true)
       end
 
       it "accepts the no-suffix (API) style at every level" do
-        form = form_class.new(deep_resource, {
+        form = form_class.new(a_deep_order_resource, {
           customer_name: "Alice",
           line_items: [
             {name: "Widget", dimensions: [{width: -1}]}
           ]
         })
+
         expect(form.valid?).to be(false)
-        expect(form.errors.map { |e| e.attribute.to_s }).to include("line_items[0].dimensions[0].width")
+        expect(form.errors[:"line_items[0].dimensions[0].width"]).to include("must be greater than 0")
       end
     end
 
@@ -756,44 +698,180 @@ RSpec.describe WellFormed::NestedAttributes do
         end)
       end
 
-      let(:user) { double("user") }
+      let(:user) { Object.new }
 
       it "registers nested attributes on the generated nested form class" do
-        line_item_klass = form_class.registered_nested_attributes[:line_items][:form_class]
-        expect(line_item_klass.registered_nested_attributes).to have_key(:dimensions)
+        line_item_form_class = form_class.registered_nested_attributes[:line_items][:form_class]
+
+        expect(line_item_form_class.registered_nested_attributes).to have_key(:dimensions)
       end
 
       it "propagates deep validation errors to the top-level form" do
-        form = form_class.new(deep_resource, user, {
+        form = form_class.new(a_deep_order_resource, user, {
           customer_name: "Alice",
           line_items_attributes: [
             {name: "Widget", dimensions_attributes: [{width: -1}]}
           ]
         })
+
         expect(form.valid?).to be(false)
-        expect(form.errors.map { |e| e.attribute.to_s }).to include("line_items[0].dimensions[0].width")
+        expect(form.errors[:"line_items[0].dimensions[0].width"]).to include("must be greater than 0")
       end
 
       it "is valid when all levels are valid" do
-        form = form_class.new(deep_resource, user, {
+        form = form_class.new(a_deep_order_resource, user, {
           customer_name: "Alice",
           line_items_attributes: [
             {name: "Widget", dimensions_attributes: [{width: 10}]}
           ]
         })
+
         expect(form.valid?).to be(true)
       end
 
       it "accepts the no-suffix (API) style at every level" do
-        form = form_class.new(deep_resource, user, {
+        form = form_class.new(a_deep_order_resource, user, {
           customer_name: "Alice",
           line_items: [
             {name: "Widget", dimensions: [{width: -1}]}
           ]
         })
+
         expect(form.valid?).to be(false)
-        expect(form.errors.map { |e| e.attribute.to_s }).to include("line_items[0].dimensions[0].width")
+        expect(form.errors[:"line_items[0].dimensions[0].width"]).to include("must be greater than 0")
       end
     end
+  end
+
+  def a_line_item_form_class
+    stub_const("LineItemForm", Class.new do
+      include WellFormed
+
+      attribute :name, :string
+      attribute :quantity, :integer
+
+      validates :name, presence: true
+      validates :quantity, numericality: {greater_than: 0}
+    end)
+  end
+
+  def an_order_form_class
+    line_item_form_class = a_line_item_form_class
+
+    stub_const("OrderForm", Class.new do
+      include WellFormed
+
+      attribute :customer_name, :string
+
+      validates :customer_name, presence: true
+
+      nested_attributes_for :line_items, line_item_form_class
+
+      private
+
+      def perform
+        resource.save
+      end
+    end)
+  end
+
+  def an_inline_order_form_class
+    stub_const("InlineOrderForm", Class.new do
+      include WellFormed
+
+      attribute :customer_name, :string
+
+      nested_attributes_for :line_items do
+        attribute :name, :string
+        validates :name, presence: true
+      end
+    end)
+  end
+
+  def an_address_form_class
+    stub_const("AddressForm", Class.new do
+      include WellFormed
+
+      attribute :street, :string
+      validates :street, presence: true
+    end)
+  end
+
+  def a_user_form_class
+    address_form_class = an_address_form_class
+
+    stub_const("UserForm", Class.new do
+      include WellFormed
+
+      attribute :name, :string
+
+      nested_attribute_for :address, address_form_class
+    end)
+  end
+
+  def an_order_resource(line_items: [])
+    Class.new do
+      attr_accessor :customer_name
+      attr_reader :line_items, :line_items_attributes_assigned
+
+      def initialize(line_items)
+        @line_items = line_items
+      end
+
+      def line_items_attributes=(attrs)
+        @line_items_attributes_assigned = attrs
+      end
+
+      def assign_attributes(attrs)
+        attrs.each { |k, v| public_send(:"#{k}=", v) }
+      end
+
+      def save
+        true
+      end
+    end.new(line_items)
+  end
+
+  def a_user_resource(address: an_address(street: nil))
+    Class.new do
+      attr_reader :address
+
+      def initialize(address)
+        @address = address
+      end
+
+      def address_attributes=(attrs)
+      end
+
+      def assign_attributes(attrs)
+      end
+
+      def save
+        true
+      end
+    end.new(address)
+  end
+
+  def a_deep_order_resource
+    Class.new do
+      def line_items = []
+
+      def line_items_attributes=(attrs)
+      end
+
+      def assign_attributes(attrs)
+        attrs.each { |k, v| public_send(:"#{k}=", v) }
+      end
+
+      def save = true
+    end.new
+  end
+
+  def a_line_item(name:, quantity:)
+    Struct.new(:name, :quantity).new(name, quantity)
+  end
+
+  def an_address(street:)
+    Struct.new(:street).new(street)
   end
 end

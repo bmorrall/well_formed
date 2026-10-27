@@ -3,65 +3,63 @@
 require "rails_helper"
 
 RSpec.describe "Api::Posts (resolves_to:)", type: :request do
-  describe "POST /api/posts (code → id)" do
-    context "with a valid user code" do
-      it "creates the post, resolves to user_id, and returns 201" do
-        user = User.create!(name: "Alice", email: "alice@example.com", code: "ALICE")
+  describe "POST /api/posts (code → id)", :aggregate_failures do
+    it "creates the post with the user_id resolved from a valid user code" do
+      user = User.create!(name: "Alice", email: "alice@example.com", code: "ALICE")
 
-        post "/api/posts", params: {post: {title: "Hello", user_id: "ALICE"}}
+      expect {
+        post api_posts_path, params: {post: {title: "Hello", user_id: "ALICE"}}
+      }.to change(Post, :count).by(1)
 
-        expect(response).to have_http_status(:created)
-        expect(Post.last.user_id).to eq(user.id)
-      end
+      expect(response).to have_http_status(:created)
+
+      post_record = Post.last
+      expect(post_record.user_id).to eq(user.id)
     end
 
-    context "with an invalid user code" do
-      before { post "/api/posts", params: {post: {title: "Hello", user_id: "MISSING"}} }
+    it "rejects an unknown user code" do
+      expect {
+        post api_posts_path, params: {post: {title: "Hello", user_id: "MISSING"}}
+      }.not_to change(Post, :count)
 
-      it "returns 422" do
-        expect(response).to have_http_status(:unprocessable_content)
-      end
+      expect(response).to have_http_status(:unprocessable_content)
 
-      it "returns a Halitosis error for user_id" do
-        error = response.parsed_body["errors"].find { |e| e.dig("source", "pointer") == "/post/user_id" }
-        expect(error).to eq(
-          "code" => "user_id_inclusion",
-          "detail" => "User is not included in the list",
-          "source" => {"pointer" => "/post/user_id"}
-        )
-      end
+      error = response.parsed_body["errors"].find { |e| e.dig("source", "pointer") == "/post/user_id" }
+      expect(error).to eq(
+        "code" => "user_id_inclusion",
+        "detail" => "User is not included in the list",
+        "source" => {"pointer" => "/post/user_id"}
+      )
     end
   end
 
-  describe "PATCH /api/posts/:id (id → code)" do
-    let!(:post_record) { Post.create!(title: "Old", body: "") }
+  describe "PATCH /api/posts/:id (id → code)", :aggregate_failures do
+    it "updates the post with the user_code resolved from a valid user id" do
+      post_record = Post.create!(title: "Old", body: "")
+      user = User.create!(name: "Alice", email: "alice@example.com", code: "ALICE")
 
-    context "with a valid user id" do
-      it "updates the post, resolves to user_code, and returns 200" do
-        user = User.create!(name: "Alice", email: "alice@example.com", code: "ALICE")
+      expect {
+        patch api_post_path(post_record), params: {post: {title: "Updated", user_code: user.id}}
+      }.to change { post_record.reload.user_code }.to("ALICE")
 
-        patch "/api/posts/#{post_record.id}", params: {post: {title: "Updated", user_code: user.id}}
-
-        expect(response).to have_http_status(:ok)
-        expect(post_record.reload.user_code).to eq("ALICE")
-      end
+      expect(response).to have_http_status(:ok)
     end
 
-    context "with an invalid user id" do
-      before { patch "/api/posts/#{post_record.id}", params: {post: {title: "Updated", user_code: 9999}} }
+    it "rejects an unknown user id" do
+      post_record = Post.create!(title: "Old", body: "")
 
-      it "returns 422" do
-        expect(response).to have_http_status(:unprocessable_content)
-      end
+      expect {
+        patch api_post_path(post_record), params: {post: {title: "Updated", user_code: 9999}}
+      }.not_to change { post_record.reload.attributes.slice("title", "user_code") }
 
-      it "returns a Halitosis error for user_code" do
-        error = response.parsed_body["errors"].find { |e| e.dig("source", "pointer") == "/post/user_code" }
-        expect(error).to eq(
-          "code" => "user_code_inclusion",
-          "detail" => "User code is not included in the list",
-          "source" => {"pointer" => "/post/user_code"}
-        )
-      end
+      expect(response).to have_http_status(:unprocessable_content)
+
+      error = response.parsed_body["errors"].find { |e| e.dig("source", "pointer") == "/post/user_code" }
+      expect(error).to eq(
+        "code" => "user_code_inclusion",
+        "detail" => "User code is not included in the list",
+        "source" => {"pointer" => "/post/user_code"}
+      )
     end
   end
 end

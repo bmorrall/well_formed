@@ -3,59 +3,47 @@
 require "rails_helper"
 
 RSpec.describe "Posts::Publications", type: :request do
-  let(:the_post) { Post.create!(title: "Hello", body: "World") }
+  describe "POST /posts/:post_id/publication", :aggregate_failures do
+    it "publishes the post" do
+      draft = Post.create!(title: "Hello", body: "World")
 
-  describe "POST /posts/:post_id/publication" do
-    context "with valid params" do
-      it "returns 200" do
-        post post_publication_path(the_post), params: {publication: {reason: "Ready to ship"}}
-        expect(response).to have_http_status(:ok)
-      end
+      expect {
+        post post_publication_path(draft), params: {publication: {reason: "Ready to ship"}}
+      }.to change { draft.reload.published }.from(false).to(true)
 
-      it "publishes the post" do
-        post post_publication_path(the_post), params: {publication: {reason: "Ready to ship"}}
-        expect(the_post.reload.published).to be(true)
-      end
+      expect(response).to have_http_status(:ok)
     end
 
-    context "with invalid params" do
-      it "returns 422" do
-        post post_publication_path(the_post), params: {publication: {reason: ""}}
-        expect(response).to have_http_status(:unprocessable_content)
-      end
+    it "does not publish the post without a reason" do
+      draft = Post.create!(title: "Hello", body: "World")
 
-      it "does not publish the post" do
-        post post_publication_path(the_post), params: {publication: {reason: ""}}
-        expect(the_post.reload.published).to be(false)
-      end
+      expect {
+        post post_publication_path(draft), params: {publication: {reason: ""}}
+      }.not_to change { draft.reload.published }
+
+      expect(response).to have_http_status(:unprocessable_content)
     end
   end
 
-  describe "PATCH /posts/:post_id/publication" do
-    let(:the_post) { Post.create!(title: "Hello", body: "World", published: true) }
+  describe "PATCH /posts/:post_id/publication", :aggregate_failures do
+    it "retracts the post" do
+      published_post = Post.create!(title: "Hello", body: "World", published: true)
 
-    context "with valid params" do
-      it "returns 200" do
-        patch post_publication_path(the_post), params: {publication: {reason: "No longer relevant"}}
-        expect(response).to have_http_status(:ok)
-      end
+      expect {
+        patch post_publication_path(published_post), params: {publication: {reason: "No longer relevant"}}
+      }.to change { published_post.reload.published }.from(true).to(false)
 
-      it "retracts the post" do
-        patch post_publication_path(the_post), params: {publication: {reason: "No longer relevant"}}
-        expect(the_post.reload.published).to be(false)
-      end
+      expect(response).to have_http_status(:ok)
     end
 
-    context "with invalid params" do
-      it "returns 422" do
-        patch post_publication_path(the_post), params: {publication: {reason: ""}}
-        expect(response).to have_http_status(:unprocessable_content)
-      end
+    it "does not retract the post without a reason" do
+      published_post = Post.create!(title: "Hello", body: "World", published: true)
 
-      it "does not retract the post" do
-        patch post_publication_path(the_post), params: {publication: {reason: ""}}
-        expect(the_post.reload.published).to be(true)
-      end
+      expect {
+        patch post_publication_path(published_post), params: {publication: {reason: ""}}
+      }.not_to change { published_post.reload.published }
+
+      expect(response).to have_http_status(:unprocessable_content)
     end
   end
 end

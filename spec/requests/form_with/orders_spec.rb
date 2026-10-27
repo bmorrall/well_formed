@@ -3,200 +3,160 @@
 require "rails_helper"
 
 RSpec.describe "Orders (form_with)", type: :request do
-  let(:valid_params) do
-    {
-      order: {
-        customer_name: "Alice",
-        line_items_attributes: [{name: "Widget", quantity: 2}],
-        billing_address_attributes: {street: "1 Main St", city: "Springfield", postcode: "12345"}
-      }
-    }
-  end
+  describe "GET /orders/new", :aggregate_failures do
+    it "renders a form for a new order with nested fields" do
+      get new_order_path
 
-  describe "GET /form_with/orders/new" do
-    it "returns 200" do
-      get "/orders/new"
       expect(response).to have_http_status(:ok)
-    end
 
-    it "renders a form posting to /form_with/orders" do
-      get "/orders/new"
-      expect(response.body).to have_selector('form[action="/orders"]')
-    end
-
-    it "renders the customer_name field" do
-      get "/orders/new"
+      expect(response.body).to have_css("form[action='#{orders_path}']")
       expect(response.body).to have_field("order[customer_name]")
-    end
-
-    it "renders a nested line item name field with the correct index" do
-      get "/orders/new"
       expect(response.body).to have_field("order[line_items_attributes][0][name]")
-    end
-
-    it "renders a nested line item quantity field with the correct index" do
-      get "/orders/new"
       expect(response.body).to have_field("order[line_items_attributes][0][quantity]")
-    end
-
-    it "renders the billing address street field" do
-      get "/orders/new"
       expect(response.body).to have_field("order[billing_address_attributes][street]")
     end
   end
 
-  describe "POST /form_with/orders" do
-    context "with valid params" do
-      it "creates the order and redirects to show" do
-        expect { post "/orders", params: valid_params }.to change(Order, :count).by(1)
-        expect(response).to redirect_to(order_path(Order.last))
-      end
+  describe "POST /orders", :aggregate_failures do
+    it "creates an order with its line items and billing address" do
+      expect {
+        post orders_path, params: {
+          order: {
+            customer_name: "Alice",
+            line_items_attributes: [{name: "Widget", quantity: 2}],
+            billing_address_attributes: {street: "1 Main St", city: "Springfield", postcode: "12345"}
+          }
+        }
+      }.to change(Order, :count).by(1)
 
-      it "creates the associated line items" do
-        post "/orders", params: valid_params
-        expect(Order.last.line_items.count).to eq(1)
-        expect(Order.last.line_items.first.name).to eq("Widget")
-      end
-
-      it "creates the billing address" do
-        post "/orders", params: valid_params
-        expect(Order.last.billing_address.street).to eq("1 Main St")
-      end
+      order = Order.last!
+      expect(response).to redirect_to(order_path(order))
+      expect(order.customer_name).to eq("Alice")
+      expect(order.line_items).to contain_exactly(have_attributes(name: "Widget", quantity: 2))
+      expect(order.billing_address).to have_attributes(street: "1 Main St", city: "Springfield", postcode: "12345")
     end
 
-    context "with invalid parent params" do
-      it "returns 422" do
-        post "/orders", params: {order: valid_params[:order].merge(customer_name: "")}
-        expect(response).to have_http_status(:unprocessable_content)
-      end
+    it "creates an order with line items keyed by string indexes (HTML form encoding)" do
+      expect {
+        post orders_path, params: {
+          order: a_valid_order_hash(line_items_attributes: {"0" => {name: "Widget", quantity: 2}})
+        }
+      }.to change(Order, :count).by(1)
 
-      it "re-renders the form" do
-        post "/orders", params: {order: valid_params[:order].merge(customer_name: "")}
-        expect(response.body).to have_selector('form[action="/orders"]')
-      end
-
-      it "shows an inline error on the customer_name field" do
-        post "/orders", params: {order: valid_params[:order].merge(customer_name: "")}
-        expect(response.body).to have_css("span.customer-name-error", text: "can't be blank")
-      end
+      order = Order.last!
+      expect(response).to redirect_to(order_path(order))
+      expect(order.line_items).to contain_exactly(have_attributes(name: "Widget", quantity: 2))
     end
 
-    context "with invalid nested line item params" do
-      let(:bad_params) { {order: valid_params[:order].merge(line_items_attributes: [{name: "", quantity: 0}])} }
+    it "re-renders the form with an error when the customer name is blank" do
+      expect {
+        post orders_path, params: {order: a_valid_order_hash(customer_name: "")}
+      }.not_to change(Order, :count)
 
-      it "returns 422" do
-        post "/orders", params: bad_params
-        expect(response).to have_http_status(:unprocessable_content)
-      end
+      expect(response).to have_http_status(:unprocessable_content)
 
-      it "shows an inline error on the line item name field" do
-        post "/orders", params: bad_params
-        expect(response.body).to have_css("span.line-item-name-error", text: "can't be blank")
-      end
-
-      it "shows an inline error on the line item quantity field" do
-        post "/orders", params: bad_params
-        expect(response.body).to have_css("span.line-item-quantity-error", text: "must be greater than 0")
-      end
+      expect(response.body).to have_css("form[action='#{orders_path}']")
+      expect(response.body).to have_css("span.customer-name-error", text: "can't be blank")
     end
 
-    context "with line_items_attributes as a hash with string integer keys (HTML form encoding)" do
-      let(:form_encoded_params) do
-        {order: valid_params[:order].merge(line_items_attributes: {"0" => {name: "Widget", quantity: 2}})}
-      end
+    it "re-renders the form with errors when a line item is invalid" do
+      expect {
+        post orders_path, params: {order: a_valid_order_hash(line_items_attributes: [{name: "", quantity: 0}])}
+      }.not_to change(Order, :count)
 
-      it "creates the order and redirects to show" do
-        expect { post "/orders", params: form_encoded_params }.to change(Order, :count).by(1)
-        expect(response).to redirect_to(order_path(Order.last))
-      end
+      expect(response).to have_http_status(:unprocessable_content)
 
-      it "creates the associated line items" do
-        post "/orders", params: form_encoded_params
-        expect(Order.last.line_items.count).to eq(1)
-        expect(Order.last.line_items.first.name).to eq("Widget")
-      end
-
-      it "returns 422 and shows errors when a line item is invalid" do
-        invalid = {order: valid_params[:order].merge(line_items_attributes: {"0" => {name: "", quantity: 0}})}
-        post "/orders", params: invalid
-        expect(response).to have_http_status(:unprocessable_content)
-        expect(response.body).to have_css("span.line-item-name-error", text: "can't be blank")
-      end
+      expect(response.body).to have_css("span.line-item-name-error", text: "can't be blank")
+      expect(response.body).to have_css("span.line-item-quantity-error", text: "must be greater than 0")
     end
 
-    context "with invalid billing address params" do
-      let(:bad_params) { {order: valid_params[:order].merge(billing_address_attributes: {street: "", city: "", postcode: ""})} }
+    it "re-renders the form with an error when a line item keyed by string index is invalid" do
+      expect {
+        post orders_path, params: {order: a_valid_order_hash(line_items_attributes: {"0" => {name: "", quantity: 0}})}
+      }.not_to change(Order, :count)
 
-      it "returns 422" do
-        post "/orders", params: bad_params
-        expect(response).to have_http_status(:unprocessable_content)
-      end
+      expect(response).to have_http_status(:unprocessable_content)
 
-      it "shows an inline error on the billing street field" do
-        post "/orders", params: bad_params
-        expect(response.body).to have_css("span.billing-street-error", text: "can't be blank")
-      end
+      expect(response.body).to have_css("span.line-item-name-error", text: "can't be blank")
+    end
+
+    it "re-renders the form with an error when the billing address is invalid" do
+      expect {
+        post orders_path, params: {
+          order: a_valid_order_hash(billing_address_attributes: {street: "", city: "", postcode: ""})
+        }
+      }.not_to change(Order, :count)
+
+      expect(response).to have_http_status(:unprocessable_content)
+
+      expect(response.body).to have_css("span.billing-street-error", text: "can't be blank")
     end
   end
 
-  describe "GET /form_with/orders/:id/edit" do
-    let!(:order) do
-      o = Order.create!(customer_name: "Bob")
-      o.line_items.create!(name: "Gizmo", quantity: 1)
-      o.create_billing_address!(street: "2 Oak Ave", city: "Shelbyville", postcode: "67890")
-      o
-    end
+  describe "GET /orders/:id/edit", :aggregate_failures do
+    it "renders a form for the existing order with nested fields" do
+      order = create_order(customer_name: "Bob", line_item_name: "Gizmo")
 
-    it "returns 200" do
-      get "/orders/#{order.id}/edit"
+      get edit_order_path(order)
+
       expect(response).to have_http_status(:ok)
-    end
 
-    it "pre-populates the customer_name field" do
-      get "/orders/#{order.id}/edit"
       expect(response.body).to have_field("order[customer_name]", with: "Bob")
-    end
-
-    it "renders the existing line item name field with the correct index" do
-      get "/orders/#{order.id}/edit"
       expect(response.body).to have_field("order[line_items_attributes][0][name]", with: "Gizmo")
     end
   end
 
-  describe "PATCH /form_with/orders/:id" do
-    let!(:order) do
-      o = Order.create!(customer_name: "Bob")
-      o.line_items.create!(name: "Gizmo", quantity: 1)
-      o.create_billing_address!(street: "2 Oak Ave", city: "Shelbyville", postcode: "67890")
-      o
-    end
+  describe "PATCH /orders/:id", :aggregate_failures do
+    it "updates the order with its line items and billing address" do
+      order = create_order
+      line_item = order.line_items.sole
 
-    context "with valid params" do
-      it "updates the order and redirects to show" do
-        patch "/orders/#{order.id}", params: {
+      expect {
+        patch order_path(order), params: {
           order: {
             customer_name: "Charlie",
-            line_items_attributes: [{id: order.line_items.first.id, name: "Updated", quantity: 5}],
+            line_items_attributes: [{id: line_item.id, name: "Updated", quantity: 5}],
             billing_address_attributes: {street: "3 Pine Rd", city: "Capital City", postcode: "11111"}
           }
         }
-        expect(response).to redirect_to(order_path(order))
-        expect(order.reload.customer_name).to eq("Charlie")
-      end
+      }.to change { order.reload.customer_name }.to("Charlie")
+        .and change { line_item.reload.name }.to("Updated")
+
+      expect(response).to redirect_to(order_path(order))
+      expect(order.billing_address).to have_attributes(street: "3 Pine Rd", city: "Capital City", postcode: "11111")
     end
 
-    context "with invalid nested line item params" do
-      it "returns 422 and shows inline errors" do
-        patch "/orders/#{order.id}", params: {
-          order: {
+    it "re-renders the form with errors when a line item is invalid" do
+      order = create_order
+      line_item = order.line_items.sole
+
+      expect {
+        patch order_path(order), params: {
+          order: a_valid_order_hash(
             customer_name: "Charlie",
-            line_items_attributes: [{id: order.line_items.first.id, name: "", quantity: 0}],
-            billing_address_attributes: {street: "3 Pine Rd", city: "Capital City", postcode: "11111"}
-          }
+            line_items_attributes: [{id: line_item.id, name: "", quantity: 0}]
+          )
         }
-        expect(response).to have_http_status(:unprocessable_content)
-        expect(response.body).to have_css("span.line-item-name-error")
-      end
+      }.not_to change { order.reload.customer_name }
+
+      expect(response).to have_http_status(:unprocessable_content)
+
+      expect(response.body).to have_css("span.line-item-name-error")
     end
+  end
+
+  def a_valid_order_hash(**attributes)
+    {
+      customer_name: "Alice",
+      line_items_attributes: [{name: "Widget", quantity: 2}],
+      billing_address_attributes: {street: "1 Main St", city: "Springfield", postcode: "12345"}
+    }.merge(attributes)
+  end
+
+  def create_order(customer_name: "Bob", line_item_name: "Gizmo")
+    order = Order.create!(customer_name:)
+    order.line_items.create!(name: line_item_name, quantity: 1)
+    order.create_billing_address!(street: "2 Oak Ave", city: "Shelbyville", postcode: "67890")
+    order
   end
 end
