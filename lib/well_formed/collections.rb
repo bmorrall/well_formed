@@ -64,16 +64,26 @@ module WellFormed
           # Uses :validate callbacks (not :validation) which are reliably set up
           # by ActiveModel::Validations in all contexts.
           resolve_method = :"_resolve_#{name}_to_#{resolve_field}"
+          resolved_ivar = :"@_#{name}_resolved_from"
 
           define_method(resolve_method) do
             val = public_send(name)
             return if val.blank?
 
+            # Re-validate from the original input when the value is the one a
+            # previous validation resolved it to, so validation is idempotent.
+            from, to = instance_variable_get(resolved_ivar)
+            val = from if from && val == to
+
             record = public_send(collection_method).find_by(match_field => val)
             if record.nil?
               errors.add(name, :inclusion)
             else
-              public_send(:"#{name}=", record.public_send(resolve_field))
+              resolved = record.public_send(resolve_field)
+              public_send(:"#{name}=", resolved)
+              # Set after assigning, as the setter clears the cached pair. Snapshot
+              # both values so in-place edits through the reader aren't mirrored here.
+              instance_variable_set(resolved_ivar, [val.dup, public_send(name).dup])
             end
           end
 
@@ -82,9 +92,17 @@ module WellFormed
           resolve_attr = name.to_s
 
           prepend(Module.new do
+            # Any assignment is new input, so forget the previously resolved pair
+            define_method(:"#{name}=") do |value|
+              remove_instance_variable(resolved_ivar) if instance_variable_defined?(resolved_ivar)
+              super(value)
+            end
+
             define_method(:resource_defaults) do
               defaults = super()
-              stored = resource&.public_send(resolve_attr)
+              return defaults unless resource.respond_to?(resolve_attr)
+
+              stored = resource.public_send(resolve_attr)
               return defaults if stored.blank?
 
               code_value = public_send(collection_method)
