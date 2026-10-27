@@ -178,6 +178,33 @@ RSpec.describe WellFormed::Collections do
         expect(form.user_id).to be_nil
       end
 
+      it "stays valid when validated again after resolving" do
+        form = form_class.new(a_record(user_id: nil), {user_id: "ABC"})
+        form.valid?
+
+        valid = form.valid?
+
+        expect(valid).to be(true)
+        expect(form.user_id).to eq(42)
+      end
+
+      it "validates a new code assigned after resolving" do
+        form = form_class.new(a_record(user_id: nil), {user_id: "ABC"})
+        form.valid?
+        form.user_id = "INVALID"
+
+        valid = form.valid?
+
+        expect(valid).to be(false)
+        expect(form.errors[:user_id]).to include("is not included in the list")
+      end
+
+      it "skips resource_defaults when the resource has no user_id reader" do
+        form = form_class.new(Object.new, {user_id: "ABC"})
+
+        expect(form.user_id).to eq("ABC")
+      end
+
       it "pre-populates user_id with the code from resource_defaults on a persisted resource" do
         form = form_class.new(a_record(user_id: 42))
 
@@ -278,6 +305,52 @@ RSpec.describe WellFormed::Collections do
       form.valid?
 
       expect(form.user_id).to eq("abc-123")
+    end
+
+    it "resolves a newly assigned value that equals the previous resolved value" do
+      users = a_collection(
+        a_record(id: 1, uuid: "uuid-a", code: "A"),
+        a_record(id: 2, uuid: "uuid-b", code: "uuid-a")
+      )
+      form_class = stub_const("UuidForm", Class.new do
+        include WellFormed
+
+        attribute :user_id
+
+        collection_for :user_id, validate: :code, resolves_to: :uuid do
+          users
+        end
+      end)
+      form = form_class.new(a_record(user_id: nil), {user_id: "A"})
+      form.valid?
+      form.user_id = "uuid-a"
+
+      valid = form.valid?
+
+      expect(valid).to be(true)
+      expect(form.user_id).to eq("uuid-b")
+    end
+
+    it "validates a resolved string value edited in place" do
+      users = a_collection(a_record(id: 1, uuid: +"uuid-a", code: "A"))
+      form_class = stub_const("UuidForm", Class.new do
+        include WellFormed
+
+        attribute :user_id
+
+        collection_for :user_id, validate: :code, resolves_to: :uuid do
+          users
+        end
+      end)
+      form = form_class.new(a_record(user_id: nil), {user_id: "A"})
+      form.valid?
+      form.user_id.replace("INVALID")
+
+      valid = form.valid?
+
+      expect(valid).to be(false)
+      expect(form.user_id).to eq("INVALID")
+      expect(form.errors[:user_id]).to include("is not included in the list")
     end
 
     it "raises ArgumentError when resolves_to: is set without a Symbol validate:" do
