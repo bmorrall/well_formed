@@ -10,25 +10,28 @@ RSpec.describe WellFormed::Extensions do
     described_class.instance_variable_set(:@bases, original_bases)
   end
 
-  let(:extension) { Module.new }
-
   it "includes a registered extension in classes that subsequently include Extensions" do
+    extension = Module.new
     described_class.register_extension(extension)
-    base = Class.new { include WellFormed::Extensions }
+
+    base = a_base_class
 
     expect(base.ancestors).to include(extension)
   end
 
   it "retroactively includes a late-registered extension in already-registered bases" do
-    base = Class.new { include WellFormed::Extensions }
+    extension = Module.new
+    base = a_base_class
+
     described_class.register_extension(extension)
 
     expect(base.ancestors).to include(extension)
   end
 
   it "retroactively includes in all registered bases" do
-    base1 = Class.new { include WellFormed::Extensions }
-    base2 = Class.new { include WellFormed::Extensions }
+    extension = Module.new
+    base1 = a_base_class
+    base2 = a_base_class
 
     described_class.register_extension(extension)
 
@@ -42,5 +45,10 @@ RSpec.describe WellFormed::Extensions do
 
   it "is included in SimpleAction" do
     expect(WellFormed::SimpleAction.ancestors).to include(described_class)
+  end
+
+  def a_base_class
+    extensions = described_class
+    Class.new { include extensions }
   end
 end

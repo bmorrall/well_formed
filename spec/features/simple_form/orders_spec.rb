@@ -2,79 +2,104 @@
 
 require "rails_helper"
 
-RSpec.describe "SimpleForm::Orders", type: :feature do
-  scenario "creating and updating an order" do
-    # New
+RSpec.feature "SimpleForm Orders" do
+  scenario "Customer places an order" do
+    # GIVEN I am on the new simple form order page
     visit new_simple_form_order_path
-    expect(page).to have_selector('form[action="/simple_form/orders"]')
 
-    fill_in "order[customer_name]", with: "Alice"
-    fill_in "order[line_items_attributes][0][name]", with: "Widget"
-    fill_in "order[line_items_attributes][0][quantity]", with: "2"
-    fill_in "order[billing_address_attributes][street]", with: "1 Main St"
-    fill_in "order[billing_address_attributes][city]", with: "Springfield"
-    fill_in "order[billing_address_attributes][postcode]", with: "12345"
+    # THEN I see the simple form order form
+    expect(page).to have_css("form[action='#{simple_form_orders_path}']")
+
+    # WHEN I fill in my order details
+    fill_in "Customer name", with: "Alice"
+    fill_in "Name", with: "Widget"
+    fill_in "Quantity", with: "2"
+    fill_in "Street", with: "1 Main St"
+    fill_in "City", with: "Springfield"
+    fill_in "Postcode", with: "12345"
+
+    # AND I place the order
     click_button "Create Order"
 
-    # Show (redirects to standard orders show)
-    expect(current_path).to match(%r{/orders/\d+\z})
-    expect(page).to have_content("Alice")
-    expect(page).to have_content("Widget")
-    expect(page).to have_content("1 Main St, Springfield, 12345")
-
-    order = Order.last
-
-    # Edit
-    visit edit_simple_form_order_path(order)
-    expect(current_path).to eq(edit_simple_form_order_path(order))
-
-    fill_in "order[customer_name]", with: "Bob"
-    fill_in "order[line_items_attributes][0][name]", with: "Gadget"
-    click_button "Update Order"
-
-    # Show after update
-    expect(current_path).to match(%r{/orders/\d+\z})
-    expect(page).to have_content("Bob")
-    expect(page).to have_content("Gadget")
+    # THEN I see my order
+    expect(page).to have_current_path(%r{\A/orders/\d+\z})
+    expect(page).to have_css("p", text: "Customer name: Alice")
+    expect(page).to have_css("p", text: "Widget × 2")
+    expect(page).to have_css("p", text: "1 Main St, Springfield, 12345")
   end
 
-  scenario "showing validation errors on create" do
+  scenario "Customer changes an existing order" do
+    # GIVEN I have placed an order
+    order = Order.create!(
+      customer_name: "Alice",
+      line_items_attributes: [{name: "Widget", quantity: 2}],
+      billing_address_attributes: {street: "1 Main St", city: "Springfield", postcode: "12345"}
+    )
+
+    # AND I am on the simple form edit page for my order
+    visit edit_simple_form_order_path(order)
+
+    # WHEN I change my name and the line item
+    fill_in "Customer name", with: "Bob"
+    fill_in "Name", with: "Gadget"
+
+    # AND I update the order
+    click_button "Update Order"
+
+    # THEN I see my updated order
+    expect(page).to have_current_path(order_path(order))
+    expect(page).to have_css("p", text: "Customer name: Bob")
+    expect(page).to have_css("p", text: "Gadget × 2")
+  end
+
+  scenario "Customer sees what to fix when placing an incomplete order" do
+    # GIVEN I am on the new simple form order page
     visit new_simple_form_order_path
 
-    fill_in "order[customer_name]", with: ""
-    fill_in "order[line_items_attributes][0][name]", with: ""
-    fill_in "order[line_items_attributes][0][quantity]", with: "0"
-    fill_in "order[billing_address_attributes][street]", with: ""
-    fill_in "order[billing_address_attributes][city]", with: ""
-    fill_in "order[billing_address_attributes][postcode]", with: ""
+    # WHEN I leave my order details blank
+    fill_in "Customer name", with: ""
+    fill_in "Name", with: ""
+    fill_in "Quantity", with: "0"
+    fill_in "Street", with: ""
+    fill_in "City", with: ""
+    fill_in "Postcode", with: ""
+
+    # AND I place the order
     click_button "Create Order"
 
-    expect(current_path).to eq(simple_form_orders_path)
+    # THEN I stay on the simple form order form
+    expect(page).to have_current_path(simple_form_orders_path)
+
+    # AND I see what to fix
     expect(page).to have_css(".order_customer_name span.error", text: "Customer name can't be blank")
     expect(page).to have_css(".order_line_items_name span.error", text: "Name can't be blank")
     expect(page).to have_css(".order_line_items_quantity span.error", text: "Quantity must be greater than 0")
     expect(page).to have_css(".order_billing_address_street span.error", text: "Street can't be blank")
   end
 
-  scenario "showing validation errors on update" do
-    visit new_simple_form_order_path
-    fill_in "order[customer_name]", with: "Alice"
-    fill_in "order[line_items_attributes][0][name]", with: "Widget"
-    fill_in "order[line_items_attributes][0][quantity]", with: "2"
-    fill_in "order[billing_address_attributes][street]", with: "1 Main St"
-    fill_in "order[billing_address_attributes][city]", with: "Springfield"
-    fill_in "order[billing_address_attributes][postcode]", with: "12345"
-    click_button "Create Order"
+  scenario "Customer sees what to fix when clearing an existing order" do
+    # GIVEN I have placed an order
+    order = Order.create!(
+      customer_name: "Alice",
+      line_items_attributes: [{name: "Widget", quantity: 2}],
+      billing_address_attributes: {street: "1 Main St", city: "Springfield", postcode: "12345"}
+    )
 
-    order = Order.last
+    # AND I am on the simple form edit page for my order
     visit edit_simple_form_order_path(order)
 
-    fill_in "order[customer_name]", with: ""
-    fill_in "order[line_items_attributes][0][name]", with: ""
-    fill_in "order[billing_address_attributes][street]", with: ""
+    # WHEN I clear my order details
+    fill_in "Customer name", with: ""
+    fill_in "Name", with: ""
+    fill_in "Street", with: ""
+
+    # AND I update the order
     click_button "Update Order"
 
-    expect(current_path).to match(%r{/simple_form/orders/\d+\z})
+    # THEN I stay on the simple form order form
+    expect(page).to have_current_path(simple_form_order_path(order))
+
+    # AND I see what to fix
     expect(page).to have_css(".order_customer_name span.error", text: "Customer name can't be blank")
     expect(page).to have_css(".order_line_items_name span.error", text: "Name can't be blank")
     expect(page).to have_css(".order_billing_address_street span.error", text: "Street can't be blank")

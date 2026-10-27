@@ -3,38 +3,26 @@
 require "rails_helper"
 
 RSpec.describe "Api::Subscriptions", type: :request do
-  describe "POST /api/subscription" do
-    context "with valid params" do
-      it "returns 201" do
-        post "/api/subscription", params: {subscription: {email: "alice@example.com", name: "Alice"}}
+  describe "POST /api/subscription", :aggregate_failures do
+    it "subscribes with an email and name" do
+      post api_subscription_path, params: {subscription: {email: "alice@example.com", name: "Alice"}}
 
-        expect(response).to have_http_status(:created)
-      end
+      expect(response).to have_http_status(:created)
 
-      it "returns the subscription details" do
-        post "/api/subscription", params: {subscription: {email: "alice@example.com", name: "Alice"}}
-
-        json = response.parsed_body
-        expect(json["email"]).to eq("alice@example.com")
-        expect(json["name"]).to eq("Alice")
-        expect(json["subscribed"]).to be(true)
-      end
+      json = response.parsed_body
+      expect(json["email"]).to eq("alice@example.com")
+      expect(json["name"]).to eq("Alice")
+      expect(json["subscribed"]).to be(true)
     end
 
-    context "with invalid params" do
-      it "returns 422" do
-        post "/api/subscription", params: {subscription: {email: "", name: ""}}
+    it "rejects a blank email and name" do
+      post api_subscription_path, params: {subscription: {email: "", name: ""}}
 
-        expect(response).to have_http_status(:unprocessable_content)
-      end
+      expect(response).to have_http_status(:unprocessable_content)
 
-      it "returns validation errors" do
-        post "/api/subscription", params: {subscription: {email: "", name: ""}}
-
-        json = response.parsed_body
-        expect(json["errors"]["email"]).to include("can't be blank")
-        expect(json["errors"]["name"]).to include("can't be blank")
-      end
+      json = response.parsed_body
+      expect(json["errors"]["email"]).to include("can't be blank")
+      expect(json["errors"]["name"]).to include("can't be blank")
     end
   end
 end

@@ -3,135 +3,122 @@
 require "rails_helper"
 
 RSpec.describe "Api::Orders", type: :request do
-  let!(:user) { User.first || User.create!(name: "Test User", email: "test@example.com") }
+  describe "POST /api/orders", :aggregate_failures do
+    it "creates the order, line items and billing address from params without an _attributes suffix" do
+      expect {
+        post api_orders_path, params: an_order_params_hash
+      }.to change(Order, :count).by(1)
 
-  let(:valid_params) do
+      expect(response).to have_http_status(:created)
+
+      order = Order.last
+      expect(order.line_items.count).to eq(1)
+      expect(order.line_items.first.name).to eq("Widget")
+      expect(order.billing_address.street).to eq("1 Main St")
+    end
+
+    it "rejects invalid line items with JSON Pointer index errors" do
+      expect {
+        post api_orders_path, params: an_order_params_hash(line_items: [{name: "", quantity: 0}])
+      }.not_to change(Order, :count)
+
+      expect(response).to have_http_status(:unprocessable_content)
+
+      pointers = response.parsed_body["errors"].filter_map { |e| e.dig("source", "pointer") }
+      expect(pointers).to include("/order/line_items/0/name", "/order/line_items/0/quantity")
+    end
+
+    it "rejects an invalid billing address with JSON Pointer slash errors" do
+      expect {
+        post api_orders_path, params: an_order_params_hash(billing_address: {street: "", city: "", postcode: ""})
+      }.not_to change(Order, :count)
+
+      expect(response).to have_http_status(:unprocessable_content)
+
+      pointers = response.parsed_body["errors"].filter_map { |e| e.dig("source", "pointer") }
+      expect(pointers).to include("/order/billing_address/street", "/order/billing_address/city", "/order/billing_address/postcode")
+    end
+
+    it "rejects a blank customer_name" do
+      expect {
+        post api_orders_path, params: an_order_params_hash(customer_name: "")
+      }.not_to change(Order, :count)
+
+      expect(response).to have_http_status(:unprocessable_content)
+
+      pointers = response.parsed_body["errors"].filter_map { |e| e.dig("source", "pointer") }
+      expect(pointers).to include("/order/customer_name")
+    end
+  end
+
+  describe "PATCH /api/orders/:id", :aggregate_failures do
+    it "updates the order from params without an _attributes suffix" do
+      order = create_order_with_line_item_and_billing_address
+      line_item = order.line_items.first
+
+      expect {
+        patch api_order_path(order), params: an_order_params_hash(
+          customer_name: "Charlie",
+          line_items: [{id: line_item.id, name: "Updated", quantity: 5}],
+          billing_address: {street: "3 Pine Rd", city: "Capital City", postcode: "11111"}
+        )
+      }.to change { order.reload.customer_name }.to("Charlie")
+
+      expect(response).to have_http_status(:ok)
+    end
+
+    it "rejects invalid line items with JSON Pointer index errors" do
+      order = create_order_with_line_item_and_billing_address
+      line_item = order.line_items.first
+
+      expect {
+        patch api_order_path(order), params: an_order_params_hash(
+          customer_name: "Charlie",
+          line_items: [{id: line_item.id, name: "", quantity: 0}],
+          billing_address: {street: "3 Pine Rd", city: "Capital City", postcode: "11111"}
+        )
+      }.not_to change { order.reload.customer_name }
+
+      expect(response).to have_http_status(:unprocessable_content)
+
+      pointers = response.parsed_body["errors"].filter_map { |e| e.dig("source", "pointer") }
+      expect(pointers).to include("/order/line_items/0/name")
+    end
+
+    it "rejects an invalid billing address with JSON Pointer slash errors" do
+      order = create_order_with_line_item_and_billing_address
+      line_item = order.line_items.first
+
+      expect {
+        patch api_order_path(order), params: an_order_params_hash(
+          customer_name: "Charlie",
+          line_items: [{id: line_item.id, name: "Widget", quantity: 1}],
+          billing_address: {street: "", city: "", postcode: ""}
+        )
+      }.not_to change { order.reload.customer_name }
+
+      expect(response).to have_http_status(:unprocessable_content)
+
+      pointers = response.parsed_body["errors"].filter_map { |e| e.dig("source", "pointer") }
+      expect(pointers).to include("/order/billing_address/street")
+    end
+  end
+
+  def create_order_with_line_item_and_billing_address
+    order = Order.create!(customer_name: "Bob")
+    order.line_items.create!(name: "Gizmo", quantity: 1)
+    order.create_billing_address!(street: "2 Oak Ave", city: "Shelbyville", postcode: "67890")
+    order
+  end
+
+  def an_order_params_hash(**overrides)
     {
       order: {
         customer_name: "Alice",
         line_items: [{name: "Widget", quantity: 2}],
-        billing_address: {street: "1 Main St", city: "Springfield", postcode: "12345"}
+        billing_address: {street: "1 Main St", city: "Springfield", postcode: "12345"},
+        **overrides
       }
     }
-  end
-
-  describe "POST /api/orders" do
-    context "with valid params (no _attributes suffix)" do
-      it "creates the order and returns 201" do
-        expect { post "/api/orders", params: valid_params }.to change(Order, :count).by(1)
-        expect(response).to have_http_status(:created)
-      end
-
-      it "creates the associated line items" do
-        post "/api/orders", params: valid_params
-        expect(Order.last.line_items.count).to eq(1)
-        expect(Order.last.line_items.first.name).to eq("Widget")
-      end
-
-      it "creates the billing address" do
-        post "/api/orders", params: valid_params
-        expect(Order.last.billing_address.street).to eq("1 Main St")
-      end
-    end
-
-    context "with invalid nested line item params" do
-      let(:bad_params) do
-        {order: valid_params[:order].merge(line_items: [{name: "", quantity: 0}])}
-      end
-
-      it "returns 422" do
-        post "/api/orders", params: bad_params
-        expect(response).to have_http_status(:unprocessable_content)
-      end
-
-      it "returns errors keyed with JSON Pointer index notation" do
-        post "/api/orders", params: bad_params
-        pointers = response.parsed_body["errors"].filter_map { |e| e.dig("source", "pointer") }
-        expect(pointers).to include("/order/line_items/0/name", "/order/line_items/0/quantity")
-      end
-
-      it "does not create the order" do
-        expect { post "/api/orders", params: bad_params }.not_to change(Order, :count)
-      end
-    end
-
-    context "with invalid billing address params" do
-      let(:bad_params) do
-        {order: valid_params[:order].merge(billing_address: {street: "", city: "", postcode: ""})}
-      end
-
-      it "returns 422" do
-        post "/api/orders", params: bad_params
-        expect(response).to have_http_status(:unprocessable_content)
-      end
-
-      it "returns errors keyed with JSON Pointer slash notation" do
-        post "/api/orders", params: bad_params
-        pointers = response.parsed_body["errors"].filter_map { |e| e.dig("source", "pointer") }
-        expect(pointers).to include("/order/billing_address/street", "/order/billing_address/city", "/order/billing_address/postcode")
-      end
-    end
-
-    context "with invalid parent params" do
-      it "returns 422 with customer_name error" do
-        post "/api/orders", params: {order: valid_params[:order].merge(customer_name: "")}
-        expect(response).to have_http_status(:unprocessable_content)
-        pointers = response.parsed_body["errors"].filter_map { |e| e.dig("source", "pointer") }
-        expect(pointers).to include("/order/customer_name")
-      end
-    end
-  end
-
-  describe "PATCH /api/orders/:id" do
-    let!(:order) do
-      o = Order.create!(customer_name: "Bob")
-      o.line_items.create!(name: "Gizmo", quantity: 1)
-      o.create_billing_address!(street: "2 Oak Ave", city: "Shelbyville", postcode: "67890")
-      o
-    end
-
-    context "with valid params (no _attributes suffix)" do
-      it "updates the order and returns 200" do
-        patch "/api/orders/#{order.id}", params: {
-          order: {
-            customer_name: "Charlie",
-            line_items: [{id: order.line_items.first.id, name: "Updated", quantity: 5}],
-            billing_address: {street: "3 Pine Rd", city: "Capital City", postcode: "11111"}
-          }
-        }
-        expect(response).to have_http_status(:ok)
-        expect(order.reload.customer_name).to eq("Charlie")
-      end
-    end
-
-    context "with invalid nested line item params" do
-      it "returns 422 with indexed error keys" do
-        patch "/api/orders/#{order.id}", params: {
-          order: {
-            customer_name: "Charlie",
-            line_items: [{id: order.line_items.first.id, name: "", quantity: 0}],
-            billing_address: {street: "3 Pine Rd", city: "Capital City", postcode: "11111"}
-          }
-        }
-        expect(response).to have_http_status(:unprocessable_content)
-        pointers = response.parsed_body["errors"].filter_map { |e| e.dig("source", "pointer") }
-        expect(pointers).to include("/order/line_items/0/name")
-      end
-    end
-
-    context "with invalid billing address params" do
-      it "returns 422 with JSON Pointer error keys" do
-        patch "/api/orders/#{order.id}", params: {
-          order: {
-            customer_name: "Charlie",
-            line_items: [{id: order.line_items.first.id, name: "Widget", quantity: 1}],
-            billing_address: {street: "", city: "", postcode: ""}
-          }
-        }
-        expect(response).to have_http_status(:unprocessable_content)
-        pointers = response.parsed_body["errors"].filter_map { |e| e.dig("source", "pointer") }
-        expect(pointers).to include("/order/billing_address/street")
-      end
-    end
   end
 end

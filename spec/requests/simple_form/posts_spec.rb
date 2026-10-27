@@ -3,35 +3,39 @@
 require "rails_helper"
 
 RSpec.describe "SimpleForm::Posts", type: :request do
-  let!(:alice) { User.create!(name: "Alice", email: "alice@example.com") }
-  let!(:bob) { User.create!(name: "Bob", email: "bob@example.com") }
-
-  describe "GET /simple_form/posts/new" do
-    it "returns 200" do
-      get "/simple_form/posts/new"
-      expect(response).to have_http_status(:ok)
-    end
-
+  describe "GET /simple_form/posts/new", :aggregate_failures do
     it "renders a select for user_id populated from collection_for_user_id" do
-      get "/simple_form/posts/new"
-      expect(response.body).to have_select("post[user_id]", with_options: ["Alice", "Bob"])
+      User.create!(name: "Alice", email: "alice@example.com")
+      User.create!(name: "Bob", email: "bob@example.com")
+
+      get new_simple_form_post_path
+
+      expect(response).to have_http_status(:ok)
+
+      expect(response.body).to have_select("post[user_id]", with_options: ["Alice"])
+      expect(response.body).to have_select("post[user_id]", with_options: ["Bob"])
     end
   end
 
-  describe "POST /simple_form/posts" do
-    context "with a valid user_id" do
-      it "creates the post and returns 201" do
-        post "/simple_form/posts", params: {post: {title: "Hello", body: "World", user_id: alice.id}}
-        expect(response).to have_http_status(:created)
-      end
+  describe "POST /simple_form/posts", :aggregate_failures do
+    it "creates a post with a user_id from the collection" do
+      user = User.create!(name: "Alice", email: "alice@example.com")
+
+      expect {
+        post simple_form_posts_path, params: {post: {title: "Hello", body: "World", user_id: user.id}}
+      }.to change(Post, :count).by(1)
+
+      expect(response).to have_http_status(:created)
     end
 
-    context "with a non-existent user_id" do
-      it "returns 422 with an inline error" do
-        post "/simple_form/posts", params: {post: {title: "Hello", body: "World", user_id: 9999}}
-        expect(response).to have_http_status(:unprocessable_content)
-        expect(response.body).to have_css(".post_user_id span.error", text: "is not included in the list")
-      end
+    it "shows an inline error for a user_id not in the collection" do
+      expect {
+        post simple_form_posts_path, params: {post: {title: "Hello", body: "World", user_id: 9999}}
+      }.not_to change(Post, :count)
+
+      expect(response).to have_http_status(:unprocessable_content)
+
+      expect(response.body).to have_css(".post_user_id span.error", text: "is not included in the list")
     end
   end
 end
