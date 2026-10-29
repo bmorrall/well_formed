@@ -581,6 +581,76 @@ RSpec.describe WellFormed::NestedAttributes do
 
         expect(form.valid?).to be(true)
       end
+
+      it "treats an empty hash assigned through the setter as not sent" do
+        form = required_form_class.new(resource, {})
+
+        form.address = {}
+
+        expect(form.address).to be_nil
+        expect(form.valid?).to be(false)
+        expect(form.errors[:address]).to include("can't be blank")
+      end
+
+      it "treats nil assigned through the setter as not sent" do
+        form = required_form_class.new(resource, {})
+
+        form.address = nil
+
+        expect(form.address).to be_nil
+        expect(form.valid?).to be(false)
+        expect(form.errors[:address]).to include("can't be blank")
+      end
+
+      it "treats an empty hash assigned through the _attributes setter as not sent" do
+        form = required_form_class.new(resource, {})
+
+        form.address_attributes = {}
+
+        expect(form.address).to be_nil
+        expect(form.valid?).to be(false)
+        expect(form.errors[:address]).to include("can't be blank")
+      end
+
+      it "discards an earlier nested form when a blank value is assigned" do
+        form = required_form_class.new(resource, {})
+
+        form.address = {street: "123 Main St"}
+        form.address = {}
+
+        expect(form.address).to be_nil
+        expect(form.valid?).to be(false)
+        expect(form.errors[:address]).to include("can't be blank")
+      end
+
+      it "still builds a nested form from keys with blank values" do
+        form = required_form_class.new(resource, {})
+
+        form.address = {street: nil}
+
+        expect(form.address).to be_a(AddressForm)
+        expect(form.valid?).to be(false)
+        expect(form.errors[:"address.street"]).to include("can't be blank")
+      end
+
+      it "does not forward a blank value to the resource" do
+        allow(resource).to receive(:address_attributes=)
+        form = required_form_class.new(resource, {})
+
+        form.address = {}
+
+        expect(resource).not_to have_received(:address_attributes=)
+      end
+
+      it "falls back to the resource's address when a blank value is assigned" do
+        form = required_form_class.new(a_user_resource(address: an_address(street: "1 Resource St")), {})
+
+        form.address = {}
+
+        expect(form.address).to be_a(AddressForm)
+        expect(form.address.street).to eq("1 Resource St")
+        expect(form.valid?).to be(true)
+      end
     end
   end
 

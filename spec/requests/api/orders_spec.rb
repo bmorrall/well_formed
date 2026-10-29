@@ -39,6 +39,15 @@ RSpec.describe "Api::Orders", type: :request do
       expect(pointers).to include("/order/billing_address/street", "/order/billing_address/city", "/order/billing_address/postcode")
     end
 
+    it "treats an empty billing address as not sent" do
+      expect {
+        post api_orders_path, params: an_order_params_hash(billing_address: {}), as: :json
+      }.to change(Order, :count).by(1)
+
+      expect(response).to have_http_status(:created)
+      expect(Order.last.billing_address).to be_nil
+    end
+
     it "rejects a blank customer_name" do
       expect {
         post api_orders_path, params: an_order_params_hash(customer_name: "")
