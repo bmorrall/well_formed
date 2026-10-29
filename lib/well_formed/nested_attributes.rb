@@ -79,8 +79,8 @@ module WellFormed
         (@registered_nested_attributes ||= {})[name] = {form_class: form_class, collection: collection}
 
         define_method(name) do
-          if instance_variable_defined?(:"@#{name}")
-            instance_variable_get(:"@#{name}")
+          if _nested_attributes_sent?(name)
+            (@_nested_forms ||= {})[name] ||= _build_nested_forms(name)
           elsif resource.respond_to?(name)
             raw = resource.public_send(name)
             if collection
@@ -94,18 +94,19 @@ module WellFormed
         end
 
         define_method(:"#{name}_attributes=") do |raw_attributes|
-          _build_nested_attributes(name, raw_attributes)
+          _assign_nested_attributes(name, raw_attributes)
         end
 
         define_method(:"#{name}=") do |raw_attributes|
-          _build_nested_attributes(name, raw_attributes)
+          _assign_nested_attributes(name, raw_attributes)
         end
 
         validate :"_validate_nested_#{name}"
 
         define_method(:"_validate_nested_#{name}") do
-          instances = instance_variable_get(:"@#{name}")
-          return unless instances
+          return unless _nested_attributes_sent?(name)
+
+          instances = public_send(name)
 
           config = self.class.registered_nested_attributes[name]
 
@@ -153,12 +154,26 @@ module WellFormed
 
     private
 
-    def _build_nested_attributes(name, raw_attributes)
-      @_nested_attributes_raw ||= {}
-      @_nested_attributes_raw[:"#{name}_attributes"] = raw_attributes
+    # Records the raw value; nested forms are built from it lazily by the reader.
+    def _assign_nested_attributes(name, raw_attributes)
+      (@_nested_attributes_raw ||= {})[name] = raw_attributes
+      @_nested_forms&.delete(name)
+
+      # Don't let accepts_nested_attributes_for build an empty associated record for a blank singular value
+      return unless _nested_attributes_sent?(name)
 
       resource.public_send(:"#{name}_attributes=", raw_attributes) if resource.respond_to?(:"#{name}_attributes=")
+    end
 
+    # A blank singular value counts as not sent, so the reader falls back to the resource.
+    def _nested_attributes_sent?(name)
+      return false unless @_nested_attributes_raw&.key?(name)
+
+      self.class.registered_nested_attributes[name][:collection] || @_nested_attributes_raw[name].present?
+    end
+
+    def _build_nested_forms(name)
+      raw_attributes = @_nested_attributes_raw[name]
       config = self.class.registered_nested_attributes[name]
       form_class = config[:form_class]
       boolean_type = ActiveModel::Type::Boolean.new
@@ -175,11 +190,11 @@ module WellFormed
           _build_nested_form(form_class, sub_resource, item_attrs.except("id", "_destroy"))
         end
         (@_nested_indexes ||= {})[name] = indexes
-        instance_variable_set(:"@#{name}", instances)
+        instances
       else
         item_attrs = raw_attributes.to_h.with_indifferent_access
         sub_resource = resource.respond_to?(name) ? resource.public_send(name) : nil
-        instance_variable_set(:"@#{name}", _build_nested_form(form_class, sub_resource, item_attrs))
+        _build_nested_form(form_class, sub_resource, item_attrs)
       end
     end
 

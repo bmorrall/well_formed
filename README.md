@@ -573,6 +573,8 @@ Each macro defines two setters — both do the same thing and can be used interc
 
 The underlying resource receives `name_attributes=` immediately when either setter is called, so `accepts_nested_attributes_for` on the model works as normal.
 
+For a singular `nested_attribute_for`, a blank value (`nil`, `{}`, or empty `ActionController::Parameters`) is treated as not sent: no nested form is built, any previously assigned nested form is discarded, the reader falls back to the resource's association, and the resource does not receive `name_attributes=`. A `validates :name, presence: true` on the parent therefore fails for a blank value. A hash with keys but blank values (e.g. `{street: nil}`) still builds and validates a nested form.
+
 ### Validations and errors
 
 Nested forms are validated automatically as part of the parent form's `valid?` call. Errors from nested forms are promoted to the parent using structured keys:
